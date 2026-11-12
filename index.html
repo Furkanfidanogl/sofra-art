@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#171a17" />
+    <meta name="description" content="Sanat, müzik ve küçük keşiflerle kendine bir mola ver. Sofra Art'a hoş geldin." />
+    <title>Sofra Art — Biraz dur. Bir şey hisset.</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" as="image" href="/images/optimized/moon-terrace-7e76e9599c-q80-1280.webp" imagesrcset="/images/optimized/moon-terrace-7e76e9599c-q80-96.webp 96w, /images/optimized/moon-terrace-7e76e9599c-q80-320.webp 320w, /images/optimized/moon-terrace-7e76e9599c-q80-640.webp 640w, /images/optimized/moon-terrace-7e76e9599c-q80-960.webp 960w, /images/optimized/moon-terrace-7e76e9599c-q80-1280.webp 1280w" imagesizes="(max-width: 380px) calc(100vw - 30px), (max-width: 760px) calc(100vw - 40px), (max-width: 1100px) calc(100vw - 64px), (max-width: 1376px) calc(100vw - 96px), 1280px" type="image/webp" fetchpriority="high" />
+    <link href="/fonts/fonts.css" rel="stylesheet" />
+    <link rel="canonical" href="https://sofra-art.netlify.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="tr_TR" />
+    <meta property="og:site_name" content="Sofra Art" />
+    <meta property="og:title" content="Sofra Art — Biraz dur. Bir şey hisset." />
+    <meta property="og:description" content="Sanat, müzik ve küçük keşiflerle kendine bir mola ver." />
+    <meta property="og:url" content="https://sofra-art.netlify.app/" />
+    <meta property="og:image" content="https://sofra-art.netlify.app/images/moon-terrace.webp" />
+    <meta property="og:image:alt" content="Ay ışığında, denize bakan sakin bir teras. Sofra Art için özgün çalışma." />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">İçeriğe geç</a>
+    <div id="app"></div>
+    <noscript><p class="notice">Galeri, yorumlar ve müzik gibi etkileşimler için JavaScript’i açabilirsin. <a href="/gizlilik/">Gizlilik ve verilerin</a></p></noscript>
+    <div id="player-root"></div>
+    <audio id="sofra-audio" preload="none" loop>
+      <source src="/audio/evening.m4a" type="audio/mp4" />
+      <source src="/audio/evening.wav" type="audio/wav" />
+    </audio>
+    <dialog id="detail-dialog" aria-label="İçerik ayrıntıları"></dialog>
+    <dialog id="quiz-dialog" aria-label="Ruh hâli testi"></dialog>
+    <dialog id="account-dialog" aria-label="Sofraya katıl"></dialog>
+    <dialog id="admin-dialog" aria-label="Yönetim masası"></dialog>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

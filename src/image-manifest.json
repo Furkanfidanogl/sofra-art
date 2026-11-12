@@ -1,0 +1,206 @@
+{
+  "/images/moon-terrace.webp": {
+    "sourceHash": "7e76e9599cea5f5fda27cfa31fb05ab7e1610c76a02434e64980c6e336239777",
+    "sources": [
+      {
+        "src": "/images/optimized/moon-terrace-7e76e9599c-q80-96.webp",
+        "width": 96,
+        "height": 64,
+        "bytes": 1404
+      },
+      {
+        "src": "/images/optimized/moon-terrace-7e76e9599c-q80-320.webp",
+        "width": 320,
+        "height": 213,
+        "bytes": 9788
+      },
+      {
+        "src": "/images/optimized/moon-terrace-7e76e9599c-q80-640.webp",
+        "width": 640,
+        "height": 427,
+        "bytes": 30178
+      },
+      {
+        "src": "/images/optimized/moon-terrace-7e76e9599c-q80-960.webp",
+        "width": 960,
+        "height": 640,
+        "bytes": 57492
+      },
+      {
+        "src": "/images/optimized/moon-terrace-7e76e9599c-q80-1280.webp",
+        "width": 1280,
+        "height": 853,
+        "bytes": 86786
+      }
+    ]
+  },
+  "/images/quiet-lake.jpg": {
+    "sourceHash": "2ceac27a16dec5a4e58480eeaf0afe20d205f3c8e8f5e58692597739cbe73bb9",
+    "sources": [
+      {
+        "src": "/images/optimized/quiet-lake-2ceac27a16-q80-96.webp",
+        "width": 96,
+        "height": 64,
+        "bytes": 1770
+      },
+      {
+        "src": "/images/optimized/quiet-lake-2ceac27a16-q80-320.webp",
+        "width": 320,
+        "height": 213,
+        "bytes": 14006
+      },
+      {
+        "src": "/images/optimized/quiet-lake-2ceac27a16-q80-640.webp",
+        "width": 640,
+        "height": 427,
+        "bytes": 47432
+      },
+      {
+        "src": "/images/optimized/quiet-lake-2ceac27a16-q80-960.webp",
+        "width": 960,
+        "height": 640,
+        "bytes": 93798
+      },
+      {
+        "src": "/images/optimized/quiet-lake-2ceac27a16-q80-1000.webp",
+        "width": 1000,
+        "height": 667,
+        "bytes": 104896
+      }
+    ]
+  },
+  "/images/wanderer.webp": {
+    "sourceHash": "333d534d3a8aa5fa3c9303c0afa216fea693e7b01901e0d3f7c09b1f05831fe0",
+    "sources": [
+      {
+        "src": "/images/optimized/wanderer-333d534d3a-q80-96.webp",
+        "width": 96,
+        "height": 123,
+        "bytes": 1532
+      },
+      {
+        "src": "/images/optimized/wanderer-333d534d3a-q80-320.webp",
+        "width": 320,
+        "height": 410,
+        "bytes": 9236
+      },
+      {
+        "src": "/images/optimized/wanderer-333d534d3a-q80-640.webp",
+        "width": 640,
+        "height": 820,
+        "bytes": 32224
+      },
+      {
+        "src": "/images/optimized/wanderer-333d534d3a-q80-960.webp",
+        "width": 960,
+        "height": 1229,
+        "bytes": 70308
+      },
+      {
+        "src": "/images/optimized/wanderer-333d534d3a-q80-1280.webp",
+        "width": 1280,
+        "height": 1639,
+        "bytes": 108906
+      }
+    ]
+  },
+  "/images/cat.jpg": {
+    "sourceHash": "db90703a5e3b52e92221b2827912fe67fa6b9ec24135a2b3f729cafc3d10ccd2",
+    "sources": [
+      {
+        "src": "/images/optimized/cat-db90703a5e-q80-96.webp",
+        "width": 96,
+        "height": 66,
+        "bytes": 896
+      },
+      {
+        "src": "/images/optimized/cat-db90703a5e-q80-320.webp",
+        "width": 320,
+        "height": 220,
+        "bytes": 4180
+      },
+      {
+        "src": "/images/optimized/cat-db90703a5e-q80-640.webp",
+        "width": 640,
+        "height": 440,
+        "bytes": 11046
+      },
+      {
+        "src": "/images/optimized/cat-db90703a5e-q80-900.webp",
+        "width": 900,
+        "height": 619,
+        "bytes": 18768
+      }
+    ]
+  },
+  "/images/forest.jpg": {
+    "sourceHash": "62ca0b137970b59042ed5836b9bcf46268dd5f1193f5867934a788d9f3a3aaec",
+    "sources": [
+      {
+        "src": "/images/optimized/forest-62ca0b1379-q80-96.webp",
+        "width": 96,
+        "height": 64,
+        "bytes": 1978
+      },
+      {
+        "src": "/images/optimized/forest-62ca0b1379-q80-320.webp",
+        "width": 320,
+        "height": 213,
+        "bytes": 18872
+      },
+      {
+        "src": "/images/optimized/forest-62ca0b1379-q80-640.webp",
+        "width": 640,
+        "height": 426,
+        "bytes": 70542
+      },
+      {
+        "src": "/images/optimized/forest-62ca0b1379-q80-960.webp",
+        "width": 960,
+        "height": 639,
+        "bytes": 144900
+      },
+      {
+        "src": "/images/optimized/forest-62ca0b1379-q80-1000.webp",
+        "width": 1000,
+        "height": 666,
+        "bytes": 161900
+      }
+    ]
+  },
+  "/images/night-sky.jpg": {
+    "sourceHash": "26ceb93376d72880e3dfdc40c044de6a2b5e3e9175ac700930ac4e133c2e5bd7",
+    "sources": [
+      {
+        "src": "/images/optimized/night-sky-26ceb93376-q80-96.webp",
+        "width": 96,
+        "height": 64,
+        "bytes": 922
+      },
+      {
+        "src": "/images/optimized/night-sky-26ceb93376-q80-320.webp",
+        "width": 320,
+        "height": 213,
+        "bytes": 9138
+      },
+      {
+        "src": "/images/optimized/night-sky-26ceb93376-q80-640.webp",
+        "width": 640,
+        "height": 427,
+        "bytes": 37460
+      },
+      {
+        "src": "/images/optimized/night-sky-26ceb93376-q80-960.webp",
+        "width": 960,
+        "height": 640,
+        "bytes": 75794
+      },
+      {
+        "src": "/images/optimized/night-sky-26ceb93376-q80-1000.webp",
+        "width": 1000,
+        "height": 667,
+        "bytes": 88226
+      }
+    ]
+  }
+}

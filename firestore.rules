@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // The browser never reads or writes the database, including signed-in admins.
+    // Future authorized operations belong in server-side Functions.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
