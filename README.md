@@ -67,6 +67,10 @@ Tarayıcı Firestore veya Storage’a doğrudan erişmez. Sunucu, App Check’i 
 
 Yorum ve takma ad birlikte değerlendirilir: `true` onay, `false` ret, `unclear` yönetici incelemesi anlamına gelir. Geçersiz model yanıtı, kota veya servis hatası da inceleme kuyruğuna düşer. Kısa tepkiler, emoji ve saygılı olumsuz eleştiri bağlamıyla değerlendirilir; moderasyon kusursuzluk garantisi taşımaz.
 
+Tekrar gönderimler transaction ve istek kimliğiyle aynı yoruma bağlanır; sürüm denetimleri eşzamanlı editörlerin birbirinin değişikliğini ezmesini engeller. Editoryal AI yanıtları da isteği başlatan hesaba ve açık forma bağlıdır; hesap, sekme veya tarih değişirse eski öneri uygulanmaz.
+
+**Veri akışı:** otomatik değerlendirme için takma ad, yorum ve ilgili soru Gemini’ye gönderilebilir. Hesap e-postası ve UID bu model isteğine eklenmez; yorum metnine yazılan kişisel bilgiler yine metinle birlikte iletilebilir. Onaylanan takma ad ve yorum herkese görünür. Ayrıntılar: [Gizlilik ve verilerin](https://sofra-art.netlify.app/gizlilik/).
+
 ## English
 
 **Art. Music. A little room for yourself.**
@@ -102,6 +106,21 @@ The browser has no direct database or storage access. Functions enforce App Chec
 
 Moderation evaluates both nickname and comment. The exact string decisions are `true` for approval, `false` for rejection and `unclear` for human review. Invalid output, provider failures and exhausted quotas also enter the review queue. Respectful criticism, short reactions and emoji are assessed in context; automated moderation cannot guarantee perfect decisions.
 
+Transactions and request IDs make comment retries idempotent, while version checks prevent concurrent editors from overwriting each other. Editorial AI responses are bound to the initiating account and form context; changing the account, tab or date invalidates a stale suggestion.
+
+**Data flow:** a nickname, comment and related question may be sent to Gemini for moderation. The account email and UID are not added to that request; personal information written inside the comment can still travel with its text. Approved nicknames and comments become public. See [Privacy and your data](https://sofra-art.netlify.app/gizlilik/) (Turkish).
+
+## Kod haritası · Code map
+
+| Dizin / Directory | Sorumluluk / Responsibility |
+| --- | --- |
+| [`src/`](src/) | Arayüz, oturum ve form durumu / UI, session and form state |
+| [`functions/`](functions/) | Yetki, içerik, moderasyon, görsel ve veri işlemleri / Authorization, content, moderation, uploads and privacy operations |
+| [`checks/`](checks/) · [`integration/`](integration/) | İzole kontroller ve emülatör senaryoları / Isolated checks and emulator scenarios |
+| [`scripts/`](scripts/) | Build, yayın doğrulaması ve operatör araçları / Build, release validation and operator tools |
+| [`public/`](public/) | Statik görseller, ses, fontlar ve bilgi sayfaları / Static media, fonts and information pages |
+| [`docs/`](docs/) | Kurulum, yayın kabulü ve içerik kaynakları / Setup, release acceptance and asset credits |
+
 ## Yerelde çalıştır · Run locally
 
 Use the Node version in [`.nvmrc`](.nvmrc). / [`.nvmrc`](.nvmrc) içindeki Node sürümünü kullan.
@@ -126,6 +145,16 @@ node scripts/check-secrets.cjs --history
 ```
 
 Emulator tests use the isolated `demo-sofra` project and require Java 21. / Emülatör testleri izole `demo-sofra` projesini kullanır ve Java 21 gerektirir.
+
+### Test stratejisi · Testing strategy
+
+| Katman / Layer | Doğrulanan davranış / Verified behavior |
+| --- | --- |
+| Birim ve arayüz kontrolleri / Unit and UI checks | Doğrulama, kaçışlama, model şeması, oturum değişimi ve eski AI yanıtları / Validation, escaping, model schemas, account changes and stale AI responses |
+| Emülatör entegrasyonu / Emulator integration | Gerçek servis koduyla erişim reddi, taslak gizliliği, yayın planı ve eşzamanlı tekrarlar / Access denial, draft privacy, scheduling and concurrent retries through the real service code |
+| Yayın kapısı / Publication gate | İzinli dosyalar, belge bağlantıları, sır desenleri, bağımlılıklar ve asset bütçesi / Allowed files, documentation links, secret patterns, dependencies and asset budgets |
+
+Testler model yanıtlarını kontrollü olarak taklit eder; emülatör paketi üretim projesine bağlanmayı reddeder. Canlı model değerlendirmesi, gerçek Google oturumu ve cihaz kabulü ayrı kontrollerdir. / Tests use controlled model responses; the emulator suite refuses a production project. Live model evaluation, real Google sessions and device acceptance are separate checks.
 
 ## Proje belgeleri · Project documentation
 
