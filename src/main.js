@@ -3,6 +3,8 @@ import {icon,brand} from './icons.js';
 import {pageTemplate} from './page-template.js';
 import {imageSource,imageAttributes,HERO_SIZES,GALLERY_SIZES} from './responsive-image.js';
 import {createDialogFocus} from './dialog-focus.js';
+import {createFeedback,SOFRA_SHH} from './feedback.js';
+import {framedImage,createImageLoading} from './image-loading.js';
 import { adminHTML } from './admin-panel.js';
 import { spotifyTrackUrl, readSpotifyPreference, saveSpotifyPreference } from './spotify-track.js';
 import { artworks, daily, moods, readings, quizQuestions, quizResults } from './content.js';
@@ -40,7 +42,6 @@ let user = null;
 let session = guestSession();
 let authBusy = false;
 let dataBusy = false;
-let toastTimer;
 let currentAdminTab = 'daily';
 let playing = false;
 let remoteDaily=null;
@@ -94,22 +95,16 @@ async function refreshPublic(id,updateDaily=false) {
     if(list)list.innerHTML=commentList(id).map(previewComment).join('')||'<p class="comment-empty">İlk sözü sen bırak.</p>';
   }
 }
-function toast(message, type='normal') {
-  const el = document.querySelector('#toast');
-  // Keep feedback in the native dialog's top layer so it remains visible and accessible.
-  (document.querySelector('dialog[open]') || document.body).append(el);
-  el.textContent = message;
-  el.className = `visible ${type === 'spam' ? 'spam' : (type === 'sofra-shh' ? 'sofra-shh' : '')}`;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.className=''; }, type === 'spam' || type === 'sofra-shh' ? 5000 : 4200);
-}
+const feedback=createFeedback({document,viewport:window.visualViewport,window});
+const imageLoading=createImageLoading(document);
+function toast(message,type='normal'){feedback.show(message,type);}
 
 function render() {
   const d = getDaily();
   const art = getArt(d.artwork);
   const account = accountPresentation(session);
   document.querySelector('#app').innerHTML = pageTemplate({d,art,account,dateLabel:todayDate().toLocaleUpperCase('tr'),playing,savedOnly,savedCount:demo.saved.length,currentMood,backend:backendEnabled(),defaultQuestion});
-  renderTable(); renderGallery();
+  renderTable(); renderGallery();imageLoading.refresh();
 }
 
 function renderTable() {
@@ -118,7 +113,8 @@ function renderTable() {
 function previewComment(c, i=0) { return `<div class="comment-preview"><span class="avatar ${i%2?'amber':''}" aria-hidden="true">${esc(c.name[0])}</span><div><span class="comment-name">${esc(c.name)}</span><p>${esc(c.text)}</p></div></div>`; }
 function renderGallery() {
   const list = catalog.filter(a => (currentMood==='all' || a.mood===currentMood) && (!savedOnly || demo.saved.includes(a.id)));
-  document.querySelector('#gallery').innerHTML = list.length ? list.map(a => `<article class="art-card"><button class="art-image-button" data-action="art" data-id="${a.id}" aria-label="${esc(a.title)} — incele"><img src="${esc(imageSource(a.image))}" ${imageAttributes(a.image,GALLERY_SIZES)} alt="${esc(a.alt)}" loading="lazy" decoding="async" /><span class="art-open">${icon('arrow')}</span></button><div class="art-meta"><div><span class="eyebrow">${esc(a.tag)}</span><h3><button data-action="art" data-id="${a.id}" style="padding:0;text-align:left">${esc(a.title)}</button></h3><p class="art-credit">${esc(a.credit.split(' · ').slice(0,2).join(' · '))}</p></div><button class="icon-button save-art ${demo.saved.includes(a.id)?'saved':''}" data-action="save" data-id="${a.id}" aria-label="${esc(a.title)} — ${demo.saved.includes(a.id)?'kaydı kaldır':'kaydet'}" aria-pressed="${demo.saved.includes(a.id)}">${icon('bookmark')}</button></div></article>`).join('') : `<div class="empty-state">${savedOnly?'Henüz bu odadan bir şey kaydetmedin. Görsellerdeki ayraç simgesine dokunabilirsin.':'Bu odada henüz bir içerik yok.'}</div>`;
+  document.querySelector('#gallery').innerHTML = list.length ? list.map(a => `<article class="art-card"><button class="art-image-button" data-action="art" data-id="${a.id}" aria-label="${esc(a.title)} — incele">${framedImage(a.image,a.alt,{sizes:GALLERY_SIZES,loading:'lazy'})}<span class="art-open">${icon('arrow')}</span></button><div class="art-meta"><div><span class="eyebrow">${esc(a.tag)}</span><h3><button data-action="art" data-id="${a.id}" style="padding:0;text-align:left">${esc(a.title)}</button></h3><p class="art-credit">${esc(a.credit.split(' · ').slice(0,2).join(' · '))}</p></div><button class="icon-button save-art ${demo.saved.includes(a.id)?'saved':''}" data-action="save" data-id="${a.id}" aria-label="${esc(a.title)} — ${demo.saved.includes(a.id)?'kaydı kaldır':'kaydet'}" aria-pressed="${demo.saved.includes(a.id)}">${icon('bookmark')}</button></div></article>`).join('') : `<div class="empty-state">${savedOnly?'Henüz bu odadan bir şey kaydetmedin. Görsellerdeki ayraç simgesine dokunabilirsin.':'Bu odada henüz bir içerik yok.'}</div>`;
+  imageLoading.refresh(document.querySelector('#gallery'));
   document.querySelectorAll('.room-button').forEach(b=>{b.classList.toggle('selected',b.dataset.id===currentMood);b.setAttribute('aria-pressed',b.dataset.id===currentMood);});
   document.querySelector('.saved-filter')?.classList.toggle('active',savedOnly);
   document.querySelector('#saved-count').textContent = demo.saved.length;
@@ -144,11 +140,12 @@ function openDialog(id, html, view='') {
   const dialog = document.querySelector(id);
   dialogFocus.remember(dialog,document.activeElement,document.querySelector('dialog[open]'));
   const feedback = document.querySelector('#toast');
-  if (feedback) document.body.append(feedback);
+  if (feedback && feedback.parentElement!==document.body) document.body.append(feedback);
   document.querySelectorAll('dialog[open]').forEach(d=>d.close());
   dialog.dataset.view=view; dialog.innerHTML = closeButton(view) + html;
   labelDialog(dialog);
   dialog.showModal(); dialog.scrollTop=0; document.body.classList.add('dialog-open');
+  imageLoading.refresh(dialog);
 }
 function renderDialog(id, html, view='', preserveNavigation=false) {
   const dialog = document.querySelector(id);
@@ -161,6 +158,7 @@ function renderDialog(id, html, view='', preserveNavigation=false) {
     dialog.dataset.view = view;
     dialog.innerHTML = closeButton(view) + html;
     labelDialog(dialog);
+    imageLoading.refresh(dialog);
     if(focusState){
       const next=[...dialog.querySelectorAll('input,textarea,select,button,a')].find(el=>focusState.name?el.name===focusState.name:focusState.action && el.dataset.action===focusState.action && el.dataset.target===focusState.target && el.dataset.id===focusState.id);
       if(next){next.focus({preventScroll:true});if(typeof focusState.start==='number' && typeof next.setSelectionRange==='function' && ['text','search','url','tel','password','textarea'].includes(next.type))next.setSelectionRange(focusState.start,focusState.end);}
@@ -170,7 +168,7 @@ function renderDialog(id, html, view='', preserveNavigation=false) {
   openDialog(id, html, view);
 }
 document.querySelectorAll('dialog').forEach(d => {
-  d.addEventListener('close',()=>{ const feedback=d.querySelector('#toast');if(feedback)document.body.append(feedback);if(!document.querySelector('dialog[open]')) document.body.classList.remove('dialog-open'); });
+  d.addEventListener('close',()=>{ const feedback=d.querySelector('#toast');if(feedback && feedback.parentElement!==document.body)document.body.append(feedback);if(!document.querySelector('dialog[open]')) document.body.classList.remove('dialog-open'); });
   d.addEventListener('click',e=>{ if(e.target===d){ const r=d.getBoundingClientRect(); if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog(d); } });
   d.addEventListener('cancel',e=>{e.preventDefault();closeDialog(d);});
 });
@@ -198,14 +196,14 @@ async function showArt(id) {
   if(revision!==viewRevision)return;
   if(!catalog.some(a=>a.id===id)){toast('Bu eser artık yayında değil.');return;}
   const art=getArt(id); currentArtId=art.id; currentCommentId=art.id;
-  openDialog('#detail-dialog', `<img class="dialog-art-image" src="${esc(imageSource(art.image))}" ${imageAttributes(art.image)} alt="${esc(art.alt)}" /><div class="dialog-body"><span class="eyebrow">${esc(art.tag)}</span><h2>${esc(art.title)}</h2><p class="dialog-credit">${esc(art.credit)}${art.source?` · <a href="${esc(art.source)}" target="_blank" rel="noopener noreferrer">Görsel kaynağı ↗</a>`:''}</p><p>${esc(art.description)}</p><div class="dialog-actions"><button class="btn ${demo.saved.includes(art.id)?'btn-primary':''}" data-action="save-detail" data-id="${art.id}">${icon('bookmark')} ${demo.saved.includes(art.id)?'Kaydedildi':'Sonraya sakla'}</button><button class="text-link" data-action="share-art" data-id="${art.id}">${icon('share')} Bağlantıyı kopyala</button></div>${commentsHTML(art.id,art.question)}</div>`);
+  openDialog('#detail-dialog', `${framedImage(art.image,art.alt,{className:'dialog-art-image'})}<div class="dialog-body"><span class="eyebrow">${esc(art.tag)}</span><h2>${esc(art.title)}</h2><p class="dialog-credit">${esc(art.credit)}${art.source?` · <a href="${esc(art.source)}" target="_blank" rel="noopener noreferrer">Görsel kaynağı ↗</a>`:''}</p><p>${esc(art.description)}</p><div class="dialog-actions"><button class="btn ${demo.saved.includes(art.id)?'btn-primary':''}" data-action="save-detail" data-id="${art.id}">${icon('bookmark')} ${demo.saved.includes(art.id)?'Kaydedildi':'Sonraya sakla'}</button><button class="text-link" data-action="share-art" data-id="${art.id}">${icon('share')} Bağlantıyı kopyala</button></div>${commentsHTML(art.id,art.question)}</div>`);
   refreshPublic(art.id).catch(error=>toast(backendErrorMessage(error)));
 }
 function showTable() { currentArtId=null;currentCommentId='table';openDialog('#detail-dialog',`<div class="dialog-body"><span class="eyebrow">GECE MASASI · GÜNÜN SORUSU</span><h2>${esc(getDaily().question||defaultQuestion)}</h2>${commentsHTML('table','Birbirimize nazik davranıyoruz. Bir cümle bile yeter.')}</div>`);refreshPublic('table').catch(error=>toast(backendErrorMessage(error))); }
 function showReading(id) {
   const r=readings.find(r=>r.id===id);if(!r)return;
   currentArtId=null;currentCommentId=null;
-  openDialog('#detail-dialog',`<img class="dialog-art-image" src="${esc(imageSource(r.image))}" ${imageAttributes(r.image)} alt="${esc(r.title)}" /><article class="dialog-body reading-body"><div class="reading-category">${esc(r.category)} <span>${r.time} okuma</span></div><h2>${esc(r.title)}</h2><p class="reading-lede">${esc(r.intro)}</p>${r.paragraphs.map(p=>`<p>${esc(p)}</p>`).join('')}<p class="dialog-credit">Sofra Art · Okuma odası</p><button class="text-link" data-action="table">Bu düşünceyi Sofraya taşı ${icon('arrow')}</button></article>`);
+  openDialog('#detail-dialog',`${framedImage(r.image,r.title,{className:'dialog-art-image'})}<article class="dialog-body reading-body"><div class="reading-category">${esc(r.category)} <span>${r.time} okuma</span></div><h2>${esc(r.title)}</h2><p class="reading-lede">${esc(r.intro)}</p>${r.paragraphs.map(p=>`<p>${esc(p)}</p>`).join('')}<p class="dialog-credit">Sofra Art · Okuma odası</p><button class="text-link" data-action="table">Bu düşünceyi Sofraya taşı ${icon('arrow')}</button></article>`);
 }
 function toggleSave(id) {
   if(!catalog.some(a=>a.id===id)) return;
@@ -254,7 +252,7 @@ function renderQuiz() {
     const counts=quizAnswers.reduce((acc,m)=>({...acc,[m]:(acc[m]||0)+1}),{});
     const mood=[...quizAnswers].reverse().sort((a,b)=>counts[b]-counts[a])[0];
     const result=quizResults[mood];const art=getArt(result.art);
-    openDialog('#quiz-dialog',`<div class="quiz-modal-body quiz-result"><span class="eyebrow">KENDİNE RASTLADIN</span><img class="quiz-result-image" src="${esc(imageSource(art.image))}" ${imageAttributes(art.image)} alt="${esc(art.alt)}" /><h2>${esc(result.title)}</h2><p>${esc(result.text)}</p><div class="quiz-actions"><button class="btn btn-primary" data-action="quiz-discover" data-id="${mood}">Bu odayı keşfet ${icon('arrow')}</button><button class="btn" data-action="quiz">Yeniden dene</button></div><p class="quiz-fineprint">Küçük bir eğlence testi; psikolojik değerlendirme değildir. Sonuçlar bir sunucuya gönderilmez.</p></div>`);return;
+    openDialog('#quiz-dialog',`<div class="quiz-modal-body quiz-result"><span class="eyebrow">KENDİNE RASTLADIN</span>${framedImage(art.image,art.alt,{className:'quiz-result-image'})}<h2>${esc(result.title)}</h2><p>${esc(result.text)}</p><div class="quiz-actions"><button class="btn btn-primary" data-action="quiz-discover" data-id="${mood}">Bu odayı keşfet ${icon('arrow')}</button><button class="btn" data-action="quiz">Yeniden dene</button></div><p class="quiz-fineprint">Küçük bir eğlence testi; psikolojik değerlendirme değildir. Sonuçlar bir sunucuya gönderilmez.</p></div>`);return;
   }
   const q=quizQuestions[step];
   openDialog('#quiz-dialog',`<div class="quiz-modal-body"><span class="eyebrow">RUH HÂLİNE BİR PENCERE · ${step+1}/3</span><div class="quiz-step" aria-label="${step+1}. soru, toplam 3">${quizQuestions.map((_,i)=>`<i class="${i<=step?'done':''}"></i>`).join('')}</div><h2>${esc(q.title)}</h2><div class="quiz-options">${q.options.map((o,i)=>`<button class="quiz-option" data-action="quiz-answer" data-id="${o.mood}"><span>${String.fromCharCode(65+i)}</span>${esc(o.text)}</button>`).join('')}</div>${step?`<button class="quiz-back" data-action="quiz-back">${icon('back')} Bir önceki soruya dön</button>`:''}<p class="quiz-fineprint">Doğru ya da yanlış cevap yok. İçinden geldiği gibi.</p></div>`);
@@ -531,7 +529,7 @@ document.addEventListener('click',async e=>{
         await refreshOpenAdmin(revision,uid);
         await refreshPublic('table');
         if(b.dataset.status==='rejected'){
-          toast('şşşşş, sofradayız 🤫','sofra-shh');
+          toast(SOFRA_SHH,'sofra-shh');
         } else {
           toast('Yorum onaylandı ve masada yerini aldı.');
         }
@@ -546,7 +544,7 @@ document.addEventListener('click',async e=>{
       renderTable();
       showAdmin('comments');
       if(c.status==='rejected'){
-        toast('şşşşş, sofradayız 🤫','sofra-shh');
+        toast(SOFRA_SHH,'sofra-shh');
       } else {
         toast('Not bu cihazda görünür hâle getirildi.');
       }
@@ -565,6 +563,7 @@ document.addEventListener('submit',async e=>{
       if(!user){showAccount();return;}
       const button=form.querySelector('[type="submit"]');if(button.disabled)return;button.disabled=true;
       const revision=viewRevision,uid=user.uid;
+      button.setAttribute('aria-busy','true');button.innerHTML='<span class="button-spinner" aria-hidden="true"></span> Sözün değerlendiriliyor…';
       const signature=JSON.stringify([name,text,form.dataset.id,form.dataset.tableKey]);
       if(form.dataset.signature!==signature){form.dataset.requestId=crypto.randomUUID();form.dataset.signature=signature;}
       const requestId=form.dataset.requestId;
@@ -572,17 +571,23 @@ document.addEventListener('submit',async e=>{
         const result=await submitComment({artId:form.dataset.id,name,text,requestId,...(form.dataset.id==='table'?{tableKey:form.dataset.tableKey}:{})});
         if(user?.uid!==uid)return;
         if(result.status==='approved') {
-          await refreshPublic(form.dataset.id);
-          if(sameView(revision,uid)){form.dataset.id==='table'?showTable():showArt(form.dataset.id);toast('Sözün masaya ulaştı ve yerini aldı.');}
+          if(sameView(revision,uid)){
+            if(form.dataset.id==='table')closeDialog(document.querySelector('#detail-dialog'));else showArt(form.dataset.id);
+            toast('Sözün masaya ulaştı ve yerini aldı.');
+          }
+          // Approval is already committed. A failed list refresh must not turn
+          // success into a submission error or leave the Night Table modal open.
+          try{await refreshPublic(form.dataset.id);}catch{}
         } else if(result.status==='rejected') {
-          if(sameView(revision,uid)){form.dataset.id==='table'?showTable():showArt(form.dataset.id);toast('şşşşş, sofradayız 🤫','sofra-shh');}
+          if(sameView(revision,uid))toast(SOFRA_SHH,'sofra-shh');
         } else {
           if(!remotePending.some(c=>c.id===result.id))remotePending.push({id:result.id,artId:form.dataset.id,name,text,status:'pending'});
           if(sameView(revision,uid)){form.dataset.id==='table'?showTable():showArt(form.dataset.id);toast('Sözün masaya ulaştı. Onaydan sonra burada görünecek.');}
         }
       } catch(error){
-        toast(backendErrorMessage(error));
-        button.disabled=false;
+        if(sameView(revision,uid))toast(backendErrorMessage(error));
+      } finally {
+        if(button.isConnected){button.disabled=false;button.removeAttribute('aria-busy');button.innerHTML='Sofraya bırak '+icon('send');}
       }
       return;
     }

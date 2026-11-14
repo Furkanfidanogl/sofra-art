@@ -18,7 +18,9 @@ Canlı adres / Live site: **https://sofra-art.netlify.app**
 | Gizlilik | Kullanıcıya bağlı export/silme, yakın tarihli doğrulama, geç model yanıtının silinen veriyi oluşturmaması |
 | Canlı HTTP | HTTPS, güvenlik başlıkları, origin kısıtlaması, asset hash eşleşmesi, bilgi sayfası ve gerçek 404 |
 
-Son yerel doğrulamada **86 kontrol/birim testi** ve **24 emülatör entegrasyon testi** geçti. Güncel commit’in otomatik sonucu [GitHub Actions](https://github.com/Furkanfidanogl/sofra-art/actions/workflows/quality.yml) üzerinden izlenir; tarihsel ham raporlar public repoda tutulmaz.
+Son yerel doğrulamada **93 kontrol/birim testi** ve **24 emülatör entegrasyon testi** geçti. Kapsam; yorum onayından sonra pencerenin kapanması, eski yanıtların farklı oturumu etkilememesi, pencere üstü bildirimler ve görsellerin yükleme/hata durumlarını da içerir. Güncel commit’in otomatik sonucu [GitHub Actions](https://github.com/Furkanfidanogl/sofra-art/actions/workflows/quality.yml) üzerinden izlenir; ham raporlar public repoda tutulmaz.
+
+`gemini-3.5-flash-lite` ile 49 sentetik moderasyon örneği canlı API üzerinden değerlendirildi: 33 onay, 15 ret, 1 inceleme; bu kümede yanlış ret, kaçak ve teknik hata görülmedi. Bu sınırlı ölçüm, gelecekteki tüm yorumlarda sıfır hata garantisi değildir. Türkçe harfsiz belirsiz ifadeler yerel küfür kalıbıyla otomatik reddedilmez; orijinal metin yine model değerlendirmesine gider.
 
 ## Operasyon ve kabul sınırları
 

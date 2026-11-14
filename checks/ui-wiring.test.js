@@ -14,7 +14,7 @@ function actualAdmin(){
   const dialog={id:'admin-dialog',open:true,dataset:{},innerHTML:'',hasAttribute(){return this.open},contains(){return false},querySelector(){return null},showModal(){this.open=true},close(){this.open=false}};
   const sandbox={createEditorialController,validateEditorialContext,applyEditorialDraft,adminHTML,crypto,
     document:{querySelector(s){if(s==='#admin-dialog'||s==='#admin-dialog[open]'&&dialog.open)return dialog;return null;},querySelectorAll(){return[]},addEventListener(k,fn){events[k]=fn},body:{append(){},classList:{add(){}}}},
-    closeButton:()=>'',dialogFocus:{remember(){},restore(){}},esc:s=>s,toast:()=>{},backendErrorMessage:e=>e.message,
+    imageLoading:{refresh(){}},closeButton:()=>'',dialogFocus:{remember(){},restore(){}},esc:s=>s,toast:()=>{},backendErrorMessage:e=>e.message,
     backendEnabled:()=>true,isAdmin:()=>true,showAccount:()=>{},getDaily:()=>({quote:'Söz',question:'Soru?',songTitle:'Şarkı',artwork:'moon'}),rememberEditor:()=>{},generateEditorial:()=>result,
     getAdminDashboard:async()=>({serverDate:'2026-11-11',packages:[],artworks:[]})};
   vm.createContext(sandbox);
@@ -50,7 +50,7 @@ test('in-place dialog rendering preserves the shared live feedback element',()=>
   const feedback={parent:'dialog',exists:true};
   const dialog={dataset:{},hasAttribute:()=>true,contains:el=>el===feedback};
   Object.defineProperty(dialog,'innerHTML',{set(){if(feedback.parent==='dialog')feedback.exists=false;}});
-  const context={document:{activeElement:null,querySelector:s=>s==='#toast'?(feedback.exists?feedback:null):dialog,body:{append(el){el.parent='body';}}},closeButton:()=>'',labelDialog:()=>{},viewRevision:7};
+  const context={document:{activeElement:null,querySelector:s=>s==='#toast'?(feedback.exists?feedback:null):dialog,body:{append(el){el.parent='body';}}},imageLoading:{refresh(){}},closeButton:()=>'',labelDialog:()=>{},viewRevision:7};
   vm.runInNewContext(section('function renderDialog(',"document.querySelectorAll('dialog').forEach")+";renderDialog('#admin-dialog','new','',true)",context);
   assert.equal(feedback.exists,true);assert.equal(feedback.parent,'body');assert.equal(context.viewRevision,7);
 });

@@ -283,5 +283,129 @@
     "expected": [
       "false"
     ]
+  },
+  {
+    "id": "ascii-bored",
+    "category": "valid",
+    "name": "Mert",
+    "text": "Bugun cok sikildim, buraya geldim.",
+    "expected": [
+      "true"
+    ]
+  },
+  {
+    "id": "ascii-boring",
+    "category": "valid",
+    "name": "Mert",
+    "text": "Bu sarki biraz sikici geldi.",
+    "expected": [
+      "true"
+    ]
+  },
+  {
+    "id": "ascii-trouble",
+    "category": "valid",
+    "name": "Mert",
+    "text": "Icimde bir sikinti var, bugun iyi degilim.",
+    "expected": [
+      "true"
+    ]
+  },
+  {
+    "id": "ascii-frequent",
+    "category": "valid",
+    "name": "Mert",
+    "text": "Sik sik buraya geliyorum.",
+    "expected": [
+      "true"
+    ]
+  },
+  {
+    "id": "ascii-traffic",
+    "category": "valid",
+    "name": "Mert",
+    "text": "Trafikte sikistik, bir sarki acip dinlendim.",
+    "expected": [
+      "true"
+    ]
+  },
+  {
+    "id": "ascii-pressure",
+    "category": "valid",
+    "name": "Mert",
+    "text": "Bu is beni sikiyor, biraz mola vereyim.",
+    "expected": [
+      "true"
+    ]
+  },
+  {
+    "id": "greeting-short",
+    "category": "valid",
+    "name": "Mert",
+    "text": "sa millet",
+    "expected": [
+      "true"
+    ]
+  },
+  {
+    "id": "single-answer",
+    "category": "valid",
+    "name": "Mert",
+    "text": "kahve",
+    "expected": [
+      "true"
+    ]
+  },
+  {
+    "id": "casual-reaction",
+    "category": "valid",
+    "name": "Mert",
+    "text": "Oha bu renkler cok iyi lan!",
+    "expected": [
+      "true"
+    ]
+  },
+  {
+    "id": "unrelated-friendly",
+    "category": "valid",
+    "name": "Mert",
+    "text": "Bugun makarna yaptim, siz nasilsiniz?",
+    "expected": [
+      "true"
+    ]
+  },
+  {
+    "id": "self-criticism",
+    "category": "valid",
+    "name": "Mert",
+    "text": "Bugun kendimi aptal gibi hissediyorum.",
+    "expected": [
+      "true"
+    ]
+  },
+  {
+    "id": "test-friendly",
+    "category": "valid",
+    "name": "Mert",
+    "text": "Deneme, sesim geliyor mu?",
+    "expected": [
+      "true"
+    ]
+  },
+  {
+    "id": "ascii-plus-abuse",
+    "category": "abuse",
+    "text": "sikildim amk",
+    "expected": [
+      "false"
+    ]
+  },
+  {
+    "id": "ascii-plus-threat",
+    "category": "abuse",
+    "text": "Sikildim, seni bulup oldurecegim.",
+    "expected": [
+      "false"
+    ]
   }
 ]
