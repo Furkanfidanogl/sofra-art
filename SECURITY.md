@@ -11,7 +11,7 @@ Report suspected security issues privately to **fatihfidanogl@gmail.com**. Inclu
 - Direct Firestore and Storage access is denied, including for signed-in administrators. Only published, sanitized images have a public gateway.
 - Uploads enforce file signatures, byte/pixel/dimension limits and WebP re-encoding. Visitor and AI text is escaped before HTML rendering.
 - Comment export/deletion binds to the verified UID. Deletion requires recent authentication and prevents late moderation from recreating removed comments.
-- Model failures remain pending for review. User limits, idempotency and global model quotas bound abuse; they are not a billing cap.
+- Model failures and disagreement during rejection verification remain pending for review. Every provider request, including rejection verification, reserves the shared hourly quota transactionally. Both assessments share one timeout. User limits, idempotency and model quotas bound abuse; they are not a billing cap.
 
 ## Credentials and publication
 

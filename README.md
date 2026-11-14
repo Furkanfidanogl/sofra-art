@@ -65,7 +65,7 @@ flowchart LR
 
 Tarayıcı Firestore veya Storage’a doğrudan erişmez. Sunucu, App Check’i ve işlem için gereken kimliği/yetkiyi doğrular. Yönetici yüklemeleri **20 MiB** ile sınırlıdır; gerçek dosya türü, piksel ve boyut kontrollerinden sonra WebP olarak yeniden kodlanır. Yalnızca yayındaki esere bağlı temizlenmiş görsel, ayrı bir geçitten sunulur.
 
-Yorum ve takma ad birlikte değerlendirilir: `true` onay, `false` ret, `unclear` yönetici incelemesi anlamına gelir. Geçersiz model yanıtı, kota veya servis hatası da inceleme kuyruğuna düşer. Kısa tepkiler, emoji ve saygılı olumsuz eleştiri bağlamıyla değerlendirilir; moderasyon kusursuzluk garantisi taşımaz.
+Yorum, takma ad ve ilgili soru kelime listesi yerine bağlamıyla değerlendirilir: `true` onay, `false` ret, `unclear` yönetici incelemesi anlamına gelir. İlk ret kararı ikinci bir model değerlendirmesiyle doğrulanır; iki değerlendirme uyuşmazsa yorum otomatik yayımlanmaz ve yöneticiye kalır. Geçersiz model yanıtı, kota veya servis hatası da inceleme kuyruğuna düşer. Kısa tepkiler, emoji, gündelik dil ve saygılı olumsuz eleştiri desteklenir; moderasyon kusursuzluk garantisi taşımaz.
 
 Tekrar gönderimler transaction ve istek kimliğiyle aynı yoruma bağlanır; sürüm denetimleri eşzamanlı editörlerin birbirinin değişikliğini ezmesini engeller. Editoryal AI yanıtları da isteği başlatan hesaba ve açık forma bağlıdır; hesap, sekme veya tarih değişirse eski öneri uygulanmaz.
 
@@ -104,7 +104,7 @@ The build renders the initial screen from public defaults; the browser then load
 
 The browser has no direct database or storage access. Functions enforce App Check, verified identities and operation-specific authorization. Administrator uploads are capped at **20 MiB**, checked for file signature and image dimensions, and re-encoded to WebP. A separate gateway exposes only sanitized images attached to currently published artwork.
 
-Moderation evaluates both nickname and comment. The exact string decisions are `true` for approval, `false` for rejection and `unclear` for human review. Invalid output, provider failures and exhausted quotas also enter the review queue. Respectful criticism, short reactions and emoji are assessed in context; automated moderation cannot guarantee perfect decisions.
+Moderation evaluates the nickname, comment and related question in context rather than using a word blacklist. The exact string decisions are `true` for approval, `false` for rejection and `unclear` for human review. An initial rejection requires a second model assessment; disagreement stays unpublished for human review. Invalid output, provider failures and exhausted quotas also enter the review queue. Respectful criticism, everyday language, short reactions and emoji are supported; automated moderation cannot guarantee perfect decisions.
 
 Transactions and request IDs make comment retries idempotent, while version checks prevent concurrent editors from overwriting each other. Editorial AI responses are bound to the initiating account and form context; changing the account, tab or date invalidates a stale suggestion.
 

@@ -34,6 +34,14 @@ Backend operatör yardımcısı `scripts/deploy-backend.cjs` yalnız Functions v
 
 GitHub Actions kalite kapısı üretim sırrı kullanmaz. GitHub’a push, Netlify’a otomatik yayın kurulduğu anlamına gelmez; mevcut hosting bağlantısını ayrıca doğrula. Ham raporlar `reports/` altında yereldir ve Git tarafından yok sayılır.
 
+## Yorum moderasyonu
+
+Kelime listesiyle otomatik ret veya güvenli kelimeyle otomatik onay yoktur. Takma ad, yorum ve soru `gemini-3.5-flash-lite` modeline birlikte gider. Açık küfür kullanımı (hedef göstermese veya takma adda olsa da), taciz, tehdit, dolandırıcılık ve ticari spam ihlaldir; masum yazım farkı, kısa tepki, saygılı eleştiri ve ihlali bildiren alıntı bağlamıyla ayrılır.
+
+Normal onay/inceleme tek istek kullanır. İlk `false` için ikinci bir ret doğrulaması yapılır; yalnız iki `false` otomatik ret olur, anlaşmazlık `unclear` kalır. Aynı modelin iki değerlendirmesi bağımsız güvenlik kanıtı değildir. İki çağrı toplam 8 saniyelik süreyi ve saatte 120 sağlayıcı isteği bütçesini paylaşır. İkinci çağrının kotası da Firestore transaction ile ayrılır; kota/servis/şema hatası manuel kuyruğa gider. Yönetici kararı ve hesap silme, gecikmiş model yanıtından üstün kalır.
+
+`node --env-file=.env.admin.local scripts/eval-gemini-live.cjs` sentetik Türkçe/karma dil, masum ifade–ihlal karşıtları ve saldırı örnekleriyle canlı model kalitesini ölçer; üretim yorumlarına yazmaz. Bu işlem sağlayıcı API kullanımına tabidir. Mock testleri model kalitesini değil akış ve hata davranışını doğrular. Politika değişiminde gerçek model ölçümünü yenile, yanlış ret/kaçak/inceleme oranını birlikte değerlendir; anahtar veya yorum içeriğini loglama. Sonuçlar `reports/` altında özel kalır.
+
 ## İzleme, yedek ve geri dönüş
 
 - `scripts/monitoring.cjs --inspect` alarm durumunu okur. Test bildirimi yalnız ayrıca kararlaştırıldığında gönderilir.

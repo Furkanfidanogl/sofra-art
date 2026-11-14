@@ -434,6 +434,36 @@ test('repeated submissions avoid redundant model calls and late model responses 
   assert.equal(userComments.size, 1, 'Exactly one comment document must exist for the concurrent user');
 });
 
+test('rejection confirmation consumes the real shared budget and cannot bypass quota',async()=>{
+  const {createModerationService}=require('../functions/moderation.cjs');
+  for(const quota of [1,2]){
+    clock+=3600001;let calls=0;
+    const moderator=createModerationService({apiKey:'emulator-mock-key',fetchFn:async()=>{
+      calls++;return{ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:'{"decision":"false"}'}]}}]})};
+    }});
+    const checked=createContentService({db,now:()=>clock,moderationService:moderator,hourlyQuota:quota});
+    const {tableKey}=await checked.currentDaily();
+    const result=await checked.submitComment(`review-quota-${quota}`,{artId:'table',tableKey,name:'Test',text:'Sentetik ret adayı.',requestId:`review-budget-${quota}`});
+    assert.equal(calls,quota);assert.equal(result.status,quota===1?'pending':'rejected');
+    const doc=(await db.collection('comments').doc(result.id).get()).data();
+    assert.equal(doc.moderation.modelCalls,quota);
+    if(quota===1)assert.equal(doc.moderation.errorReason,'quota-limit');
+    else assert.equal(doc.moderation.verification,'confirmed');
+    const count=(await db.doc(`requestLimits/${d.hash('global:gemini-moderation')}`).get()).data().count;
+    assert.equal(count,quota);
+    assert.equal((await checked.getPublicContent({artId:'table'})).comments.some(c=>c.id===result.id),false);
+  }
+  clock+=3600001;let parallelCalls=0;
+  const parallelModerator=createModerationService({apiKey:'emulator-mock-key',fetchFn:async()=>{
+    parallelCalls++;return{ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:'{"decision":"false"}'}]}}]})};
+  }});
+  const parallel=createContentService({db,now:()=>clock,moderationService:parallelModerator,hourlyQuota:4});
+  const {tableKey}=await parallel.currentDaily();
+  const values=await Promise.all(Array.from({length:6},(_,i)=>parallel.submitComment(`review-parallel-${i}`,{artId:'table',tableKey,name:'Test',text:'Sentetik paralel ret adayı.',requestId:`review-parallel-${i}`})));
+  assert.equal(parallelCalls,4);assert.ok(values.every(r=>r.status!=='approved'));
+  assert.equal((await db.doc(`requestLimits/${d.hash('global:gemini-moderation')}`).get()).data().count,4);
+});
+
 test('hourly moderation budget enforces quota limit under real concurrent requests and recovers after 1 hour window', async () => {
   clock += 3600001; // Advance past any previous test window so global budget starts fresh
   let modCalls = 0;
@@ -779,14 +809,20 @@ test('public content deep link includes requested published artwork even if beyo
   assert.equal(publicData.comments !== undefined, true);
 });
 test('nickname moderation rejects prohibited public names and passes valid names to the model',async()=>{
-  clock+=100000;let calls=0,seenName;
-  const full=createContentService({db,now:()=>clock,moderationService:{isEnabled:()=>true,evaluateComment:async({name})=>{calls++;seenName=name;return {decision:'true'};}}});
+  clock+=3600001;let calls=0,seenName;
+  const {createModerationService}=require('../functions/moderation.cjs');
+  const moderator=createModerationService({apiKey:'emulator-mock-key',fetchFn:async(_,options)=>{
+    calls++;const input=JSON.parse(JSON.parse(options.body).contents[0].parts[0].text);seenName=input.name;
+    const decision=input.name==='fuck'?'false':'true';
+    return{ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({decision})}]}}]})};
+  }});
+  const full=createContentService({db,now:()=>clock,moderationService:moderator});
   const tableKey=(await full.currentDaily()).tableKey;
   const bad=await full.submitComment('nickname-bypass',{...sample,tableKey,name:'fuck',requestId:'nickname-bad',text:'Bugün sessiz bir sabah yaşadım.'});
-  assert.equal(bad.status,'rejected');assert.equal(calls,0);
+  assert.equal(bad.status,'rejected');assert.equal(calls,2);
   assert.equal((await full.getPublicContent({artId:'table'})).comments.some(c=>c.id===bad.id),false);
   const good=await full.submitComment('nickname-valid',{...sample,tableKey,name:'İlker',requestId:'nickname-good',text:'Bu seçkiyi bugün biraz hüzünlü buldum.'});
-  assert.equal(good.status,'approved');assert.equal(seenName,'İlker');assert.equal(calls,1);
+  assert.equal(good.status,'approved');assert.equal(seenName,'İlker');assert.equal(calls,3);
 });
 
 test('privacy export/delete is owner-bound, paginated, retry-safe, and blocks in-flight comment recreation',async()=>{

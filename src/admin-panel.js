@@ -11,6 +11,7 @@ export const reasonLabels={
   'evaluation-error':'Değerlendirme hatası',
   'disabled':'Gemini moderasyonu kapalı / anahtar yok',
   'explicit-content':'Açık küfür/argo filtresi (otomatik ret)',
+  'review-disagreement':'İki bağlam değerlendirmesi uyuşmadı; yönetici incelemesi gerekiyor',
 };
 export function commentStatusLabel(c, now = Date.now()) {
   if (c.status === 'pending') {

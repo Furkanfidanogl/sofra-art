@@ -124,35 +124,22 @@ function createContentService({db,now=Date.now,moderationService=null,editorialS
       });
       return {id:initial.id,status:'pending'};
     }
-    const { isObscene } = require('./moderation.cjs');
-    let modResult = { decision: 'unclear' };
-    if (isObscene(value.text) || isObscene(value.name)) {
-      modResult = { decision: 'false', model: 'blocklist', reason: 'explicit-content' };
-    } else {
-      let budgetAllowed=true;
-      const budgetRef=db.doc(`requestLimits/${d.hash('global:gemini-moderation')}`);
-      try {
+    const budgetRef=db.doc(`requestLimits/${d.hash('global:gemini-moderation')}`);
+    async function reserveModelCall(){
+      try{
         await db.runTransaction(async tx=>{
           const doc=await tx.get(budgetRef);
           tx.set(budgetRef,d.rate(doc.data(),time,{windowMs:3600000,limit:hourlyQuota,minInterval:0}));
         });
-      } catch {
-        budgetAllowed=false;
-      }
-      if(budgetAllowed) {
-        try {
-          modResult=await moderationService.evaluateComment({
-            text:value.text,
-            name:value.name,
-            question:questionText,
-          });
-        } catch {
-          modResult={decision:'unclear',errorReason:'evaluation-error'};
-        }
-      } else {
-        modResult={decision:'unclear',errorReason:'quota-limit'};
-      }
+        return true;
+      }catch{return false;}
     }
+    let modResult={decision:'unclear'};
+    if(await reserveModelCall()){
+      try{
+        modResult=await moderationService.evaluateComment({text:value.text,name:value.name,question:questionText,reserveAdditionalCall:reserveModelCall});
+      }catch{modResult={decision:'unclear',errorReason:'evaluation-error'};}
+    }else{modResult={decision:'unclear',errorReason:'quota-limit'};}
     const targetStatus=modResult.decision==='true'?'approved':(modResult.decision==='false'?'rejected':'pending');
     const finalStatus=await db.runTransaction(async tx=>{
       const doc=await tx.get(ref);
@@ -164,6 +151,9 @@ function createContentService({db,now=Date.now,moderationService=null,editorialS
           decision:modResult.decision || 'unclear',
           model:modResult.model || (moderationService.getModel?moderationService.getModel():'gemini'),
           evaluatedAt:time,
+          ...(modResult.policyVersion?{policyVersion:modResult.policyVersion}:{}),
+          ...(modResult.verification?{verification:modResult.verification}:{}),
+          ...(Number.isSafeInteger(modResult.modelCalls)?{modelCalls:modResult.modelCalls}:{}),
           ...(modResult.errorReason?{errorReason:modResult.errorReason}:{}),
           ...(modResult.reason?{reason:modResult.reason}:{})
         }

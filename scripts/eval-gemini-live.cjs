@@ -7,7 +7,10 @@ const { createModerationService } = require('../functions/moderation.cjs');
 
 const TEST_CASES = require('../checks/fixtures/moderation-live.json');
 const {createHash}=require('node:crypto');
-const {SYSTEM_INSTRUCTION}=require('../functions/moderation.cjs');
+const {SYSTEM_INSTRUCTION,REVIEW_INSTRUCTION,POLICY_VERSION}=require('../functions/moderation.cjs');
+const requestedIds=process.argv.slice(2);
+if(requestedIds.some(id=>!TEST_CASES.some(c=>c.id===id)))throw new Error('UNKNOWN_EVALUATION_CASE');
+const selectedCases=requestedIds.length?TEST_CASES.filter(c=>requestedIds.includes(c.id)):TEST_CASES;
 
 (async () => {
   const ctx = await loadContext();
@@ -26,14 +29,14 @@ const {SYSTEM_INSTRUCTION}=require('../functions/moderation.cjs');
     model
   });
 
-  console.log(`Starting live model evaluation on ${TEST_CASES.length} cases with model: ${model}...\n`);
+  console.log(`Starting live model evaluation on ${selectedCases.length} cases with model: ${model}...\n`);
 
   const results = [];
   let falsePositives = 0;
   let falseNegatives = 0;
   let unnecessaryQueues=0,technicalErrors=0;
 
-  for (const c of TEST_CASES) {
+  for (const c of selectedCases) {
     const start = Date.now();
     let modResult;
     try {
@@ -57,6 +60,8 @@ const {SYSTEM_INSTRUCTION}=require('../functions/moderation.cjs');
       model: modResult.model || model,
       reason: modResult.reason || modResult.errorReason || null,
       durationMs: duration,
+      modelCalls: modResult.modelCalls || 0,
+      verification: modResult.verification || null,
       pass: isMatch
     });
 
@@ -72,12 +77,19 @@ const {SYSTEM_INSTRUCTION}=require('../functions/moderation.cjs');
     evaluatedAt: new Date().toISOString(),
     model,
     caseCount: results.length,
-    corpusSha256:createHash('sha256').update(JSON.stringify(TEST_CASES)).digest('hex'),
-    policySha256:createHash('sha256').update(SYSTEM_INSTRUCTION).digest('hex'),
+    corpusSha256:createHash('sha256').update(JSON.stringify(selectedCases)).digest('hex'),
+    policyVersion:POLICY_VERSION,
+    policySha256:createHash('sha256').update(SYSTEM_INSTRUCTION+REVIEW_INSTRUCTION).digest('hex'),
     limitation:"Bounded synthetic corpus; no production comment writes; not a universal error-rate guarantee.",
     failedCases:results.filter(r=>!r.pass).map(r=>r.id),
     unnecessaryQueues,technicalErrors,
     distribution,
+    providerCalls:results.reduce((n,r)=>n+r.modelCalls,0),
+    byCategory:Object.fromEntries([...new Set(results.map(r=>r.category))].map(category=>{
+      const group=results.filter(r=>r.category===category);
+      return[category,{cases:group.length,passed:group.filter(r=>r.pass).length,failed:group.filter(r=>!r.pass).map(r=>r.id)}];
+    })),
+    latencyMs:{p50:[...results].sort((a,b)=>a.durationMs-b.durationMs)[Math.floor(results.length*.5)]?.durationMs,p95:[...results].sort((a,b)=>a.durationMs-b.durationMs)[Math.min(results.length-1,Math.floor(results.length*.95))]?.durationMs},
     falsePositives,
     falseNegatives,
     results

@@ -10,7 +10,6 @@ const {
   buildPrompt,
   parseModelOutput,
   createModerationService,
-  isObscene,
 } = require('../functions/moderation.cjs');
 const d = require('../functions/domain.cjs');
 
@@ -181,87 +180,17 @@ test('prompt injection text inside comment is passed as user text only and never
   assert.match(capturedBody.contents[0].parts[0].text, /ADMIN OVERRIDE/);
 });
 
-test('isObscene deterministically detects profanity and explicit sexual words in Turkish and English', () => {
-  const obsceneSamples = [
-    'göt',
-    'gööööt',
-    'sik',
-    'sikerim',
-    'siktir',
-    'siiiiktttiiir',
-    'sex',
-    'seks',
-    'amk',
-    'aq',
-    'orospu',
-    'fuck',
-    'shit',
-    'yarrak',
-    'piç',
-    'piçler',
-    'porn',
-    's*k',
-    'g*t',
-    'f*ck',
-    'a.m.k',
-    's.i.k',
-  ];
-  for (const sample of obsceneSamples) {
-    assert.equal(isObscene(sample), true, `Expected "${sample}" to be identified as obscene`);
+test('all text reaches contextual assessment; rejection requires two matching decisions',async()=>{
+  const inputs=[];
+  const service=createModerationService({apiKey:'test-key',fetchFn:async(_,options)=>{
+    inputs.push(JSON.parse(JSON.parse(options.body).contents[0].parts[0].text));
+    return{ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:'{"decision":"false"}'}]}}]})};
+  }});
+  for(const text of ['sik','sex','göt','amk','Amina','Siklet farkı','Sik sik geliyorum.']){
+    const count=inputs.length,result=await service.evaluateComment({text,name:'Mert'});
+    assert.equal(result.decision,'false');assert.equal(result.verification,'confirmed');assert.equal(result.modelCalls,2);
+    assert.equal(inputs.length,count+2);assert.equal(inputs.at(-1).text,text);
   }
-
-  const naturalSamples = [
-    'Dickens’in romanları bana iyi geliyor.',
-    'Siklon tablosundaki renkleri sevdim.',
-    'Siklet farkı bu maçta belirleyiciydi.',
-    'akşam kaldık burada',
-    'tamam kardeşim sağ ol',
-    'klasik',
-    'klasik müzik dinliyorum',
-    'fizik kuralları',
-    'eksik parçalar tamamlandı',
-    'içimde bir sıkıntı var',
-    'bugün çok sıkıldım',
-    'bunu ileriye götürmek gerek',
-    'güzel bir gösteri oldu',
-    'başka bir seçenek var mı',
-    'hüzünlü bir gece, sessizce düşünüyorum',
-    'yalnız hissediyorum ama burası huzur verdi',
-    'yararlı bir düşünce',
-    'Renkler biraz soğuk ama ruhuma dokundu.',
-    'Bu resim bana derin bir hüzün ve yalnızlık hissettirdi.',
-  ];
-  for (const sample of naturalSamples) {
-    assert.equal(isObscene(sample), false, `Expected "${sample}" to be allowed naturally`);
-  }
-});
-
-test('createModerationService short-circuits profanities via blocklist without calling the model API', async () => {
-  let fetchCalled = false;
-  const mockFetch = async () => {
-    fetchCalled = true;
-    return { ok: true, status: 200, json: async () => ({ candidates: [] }) };
-  };
-
-  const service = createModerationService({
-    apiKey: 'test-key',
-    fetchFn: mockFetch,
-  });
-
-  const resSik = await service.evaluateComment({ text: 'sik' });
-  assert.equal(resSik.decision, 'false');
-  assert.equal(resSik.model, 'blocklist');
-  assert.equal(fetchCalled, false);
-
-  const resSex = await service.evaluateComment({ text: 'sex' });
-  assert.equal(resSex.decision, 'false');
-  assert.equal(resSex.model, 'blocklist');
-  assert.equal(fetchCalled, false);
-
-  const resGot = await service.evaluateComment({ text: 'göt' });
-  assert.equal(resGot.decision, 'false');
-  assert.equal(resGot.model, 'blocklist');
-  assert.equal(fetchCalled, false);
 });
 
 test('createModerationService disables itself when SOFRA_GEMINI_MODERATION_ENABLED=false', async () => {
@@ -334,18 +263,15 @@ test('createModerationService handles non-STOP finishReason (e.g. SAFETY, MAX_TO
     assert.equal(result.errorReason, finishReason.toLowerCase());
   }
 });
-test('public nicknames are moderated with the body without rejecting ordinary names', async () => {
+test('public nicknames and the body always share the same contextual assessment',async()=>{
   let calls=0;
   const service=createModerationService({apiKey:'test-key',fetchFn:async(_,options)=>{
-    calls++;const body=JSON.parse(options.body);
-    assert.equal(JSON.parse(body.contents[0].parts[0].text).name,'İlker');
-    assert.match(body.contents[0].parts[0].text,/İlker/);
-    return {ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:'{"decision":"true"}'}]}}]})};
+    calls++;const input=JSON.parse(JSON.parse(options.body).contents[0].parts[0].text);
+    assert.equal(input.text,'Bu tabloyu biraz hüzünlü buldum.');
+    const decision=input.name==='İlker'?'true':'false';
+    return{ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({decision})}]}}]})};
   }});
-  for(const name of ['fuck','f*ck','amk']) {
-    assert.equal((await service.evaluateComment({name,text:'Bugün gökyüzü bana huzur verdi.'})).decision,'false');
-  }
-  assert.equal(calls,0,'Explicit nicknames must not consume model quota');
-  assert.equal((await service.evaluateComment({name:'İlker',text:'Bu tabloyu biraz hüzünlü buldum.'})).decision,'true');
-  assert.equal(calls,1);
+  for(const name of ['fuck','f*ck','amk'])assert.equal((await service.evaluateComment({name,text:'Bu tabloyu biraz hüzünlü buldum.'})).decision,'false');
+  assert.equal(calls,6);
+  assert.equal((await service.evaluateComment({name:'İlker',text:'Bu tabloyu biraz hüzünlü buldum.'})).decision,'true');assert.equal(calls,7);
 });
