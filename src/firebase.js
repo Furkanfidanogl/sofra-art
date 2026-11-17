@@ -1,6 +1,6 @@
 // Authentication, App Check and callable Functions only. Never import DB/Storage here.
 import { createSessionObserver } from './auth-session.js';
-import { primaryAuthProvider } from './account-presentation.js';
+import { activeAuthProvider, deletionReauthProvider, hasLinkedAppleProvider } from './account-presentation.js';
 
 const nodeEnv = typeof process === 'undefined' ? {} : (process.env || {});
 const readEnv = (viteVal, processVal) => viteVal ?? processVal;
@@ -75,65 +75,117 @@ export async function observeSession(onChange, onError) {
   });
 }
 
-export async function googleSignIn() {
-  const { sdk, auth } = loadedAuth || await loadAuth();
-  return (await sdk.signInWithPopup(auth, createGoogleProvider(sdk))).user;
-}
+// Exported DI boundary so tests exercise the real provider/credential/revocation paths.
+export function createAuthActions({
+  loadAuth: resolveAuth,
+  getLoadedAuth = () => null,
+  hasAuthLoader = () => true,
+  isAppleEnabled = () => false,
+}) {
+  const resolveContext = () => getLoadedAuth() || resolveAuth();
 
-export async function appleSignIn() {
-  if (!appleAuthConfigured()) {
-    throw Object.assign(new Error('APPLE_NOT_CONFIGURED'), { code: 'auth/operation-not-allowed' });
+  async function googleSignIn() {
+    const { sdk, auth } = await resolveContext();
+    return (await sdk.signInWithPopup(auth, createGoogleProvider(sdk))).user;
   }
-  const { sdk, auth } = loadedAuth || await loadAuth();
-  return (await sdk.signInWithPopup(auth, createAppleProvider(sdk))).user;
+
+  async function appleSignIn() {
+    if (!isAppleEnabled()) {
+      throw Object.assign(new Error('APPLE_NOT_CONFIGURED'), { code: 'auth/operation-not-allowed' });
+    }
+    const { sdk, auth } = await resolveContext();
+    return (await sdk.signInWithPopup(auth, createAppleProvider(sdk))).user;
+  }
+
+  async function signOutCurrent() {
+    if (!hasAuthLoader() && !getLoadedAuth()) return;
+    const { sdk, auth } = await resolveContext();
+    await sdk.signOut(auth);
+  }
+
+  async function reauthenticateForDeletion(expectedUid = null, preferredProviderId = null) {
+    const { sdk, auth } = await resolveContext();
+    if (!auth.currentUser) throw Object.assign(new Error('NO_USER'), { code: 'auth/user-token-expired' });
+    if (expectedUid && auth.currentUser.uid !== expectedUid) throw new Error('ACCOUNT_CHANGED');
+
+    const linkedApple = hasLinkedAppleProvider(auth.currentUser, preferredProviderId);
+    const resolvedProvider = deletionReauthProvider(auth.currentUser, preferredProviderId) || activeAuthProvider(auth.currentUser, preferredProviderId) || 'google.com';
+    if (resolvedProvider === 'apple.com' && !isAppleEnabled()) {
+      throw Object.assign(new Error('APPLE_NOT_CONFIGURED'), { code: 'auth/operation-not-allowed' });
+    }
+
+    const provider = resolvedProvider === 'apple.com' ? createAppleProvider(sdk) : createGoogleProvider(sdk);
+    const result = await sdk.reauthenticateWithPopup(auth.currentUser, provider);
+    if ((expectedUid && result?.user?.uid !== expectedUid) || (expectedUid && auth.currentUser?.uid !== expectedUid)) {
+      throw new Error('ACCOUNT_CHANGED');
+    }
+
+    let appleAccessToken = null;
+    if (resolvedProvider === 'apple.com') {
+      const credential = sdk.OAuthProvider.credentialFromResult(result);
+      appleAccessToken = typeof credential?.accessToken === 'string' && credential.accessToken.trim()
+        ? credential.accessToken
+        : null;
+      if (!appleAccessToken) {
+        throw Object.assign(new Error('APPLE_REVOCATION_TOKEN_MISSING'), { code: 'auth/apple-revocation-failed' });
+      }
+    }
+
+    await sdk.getIdToken(auth.currentUser, true);
+    return {
+      uid: auth.currentUser.uid,
+      providerId: resolvedProvider,
+      requiresAppleRevocation: linkedApple || resolvedProvider === 'apple.com',
+      appleAccessToken,
+    };
+  }
+
+  async function revokeAppleAuthorization(expectedUid, appleAccessToken) {
+    const { sdk, auth } = await resolveContext();
+    if (!expectedUid || auth.currentUser?.uid !== expectedUid) throw new Error('ACCOUNT_CHANGED');
+    if (typeof appleAccessToken !== 'string' || !appleAccessToken.trim()) {
+      throw Object.assign(new Error('APPLE_REVOCATION_TOKEN_MISSING'), { code: 'auth/apple-revocation-failed' });
+    }
+    try {
+      await sdk.revokeAccessToken(auth, appleAccessToken);
+    } catch {
+      throw Object.assign(new Error('APPLE_REVOCATION_FAILED'), { code: 'auth/apple-revocation-failed' });
+    }
+  }
+
+  async function deleteCurrentAccount(expectedUid) {
+    const { sdk, auth } = await resolveContext();
+    if (!expectedUid || auth.currentUser?.uid !== expectedUid) throw new Error('ACCOUNT_CHANGED');
+    await sdk.deleteUser(auth.currentUser);
+  }
+
+  return {
+    googleSignIn,
+    appleSignIn,
+    signOutCurrent,
+    reauthenticateForDeletion,
+    revokeAppleAuthorization,
+    deleteCurrentAccount,
+  };
 }
 
-export async function signOutCurrent() {
-  if (!authPromise && !loadedAuth) return;
-  const { sdk, auth } = loadedAuth || await authPromise;
-  await sdk.signOut(auth);
-}
+const defaultAuthActions = createAuthActions({
+  loadAuth,
+  getLoadedAuth: () => loadedAuth,
+  hasAuthLoader: () => Boolean(authPromise || loadedAuth),
+  isAppleEnabled: appleAuthConfigured,
+});
+
+export const {
+  googleSignIn,
+  appleSignIn,
+  signOutCurrent,
+  reauthenticateForDeletion,
+  revokeAppleAuthorization,
+  deleteCurrentAccount,
+} = defaultAuthActions;
 
 export const googleSignOut = signOutCurrent;
-
-export async function reauthenticateForDeletion(expectedUid = null, preferredProviderId = null) {
-  const { sdk, auth } = loadedAuth || await loadAuth();
-  if (!auth.currentUser) throw Object.assign(new Error('NO_USER'), { code: 'auth/user-token-expired' });
-  if (expectedUid && auth.currentUser.uid !== expectedUid) throw new Error('ACCOUNT_CHANGED');
-  const resolvedProvider = primaryAuthProvider(auth.currentUser, preferredProviderId) || 'google.com';
-  if (resolvedProvider === 'apple.com' && !appleAuthConfigured()) {
-    throw Object.assign(new Error('APPLE_NOT_CONFIGURED'), { code: 'auth/operation-not-allowed' });
-  }
-  const provider = resolvedProvider === 'apple.com' ? createAppleProvider(sdk) : createGoogleProvider(sdk);
-  const result = await sdk.reauthenticateWithPopup(auth.currentUser, provider);
-  if ((expectedUid && result?.user?.uid !== expectedUid) || (expectedUid && auth.currentUser?.uid !== expectedUid)) {
-    throw new Error('ACCOUNT_CHANGED');
-  }
-  const appleAccessToken = resolvedProvider === 'apple.com'
-    ? (sdk.OAuthProvider.credentialFromResult(result)?.accessToken || null)
-    : null;
-  await sdk.getIdToken(auth.currentUser, true);
-  return { uid: auth.currentUser.uid, providerId: resolvedProvider, appleAccessToken };
-}
-
-export async function revokeAppleAuthorization(expectedUid, appleAccessToken) {
-  const { sdk, auth } = loadedAuth || await loadAuth();
-  if (!expectedUid || auth.currentUser?.uid !== expectedUid) throw new Error('ACCOUNT_CHANGED');
-  if (typeof appleAccessToken !== 'string' || !appleAccessToken.trim()) {
-    throw Object.assign(new Error('APPLE_REVOCATION_TOKEN_MISSING'), { code: 'auth/apple-revocation-failed' });
-  }
-  try {
-    await sdk.revokeAccessToken(auth, appleAccessToken);
-  } catch {
-    throw Object.assign(new Error('APPLE_REVOCATION_FAILED'), { code: 'auth/apple-revocation-failed' });
-  }
-}
-
-export async function deleteCurrentAccount(expectedUid) {
-  const { sdk, auth } = loadedAuth || await loadAuth();
-  if (!expectedUid || auth.currentUser?.uid !== expectedUid) throw new Error('ACCOUNT_CHANGED');
-  await sdk.deleteUser(auth.currentUser);
-}
 
 export const backendEnabled = () => readEnv(import.meta.env?.VITE_SOFRA_BACKEND_ENABLED, nodeEnv.VITE_SOFRA_BACKEND_ENABLED) === 'true';
 

@@ -3,12 +3,12 @@ export const guestSession = () => ({ user: null, admin: false, providerId: null,
 
 export const AUTHORIZED_ADMIN_EMAIL = 'fatihfidanogl@gmail.com';
 
-function isGoogleAdminIdentity(user, signInProvider) {
-  if (!user || user.emailVerified !== true) return false;
-  const email = (user.email || '').toLowerCase().trim();
-  if (!email || email !== AUTHORIZED_ADMIN_EMAIL) return false;
-  if (signInProvider && signInProvider !== 'google.com') return false;
-  return Array.isArray(user.providerData) && user.providerData.some(p => p?.providerId === 'google.com');
+export function isAuthorizedGoogleAdmin({ email, emailVerified, adminClaim, signInProvider, providerData }) {
+  if (adminClaim !== true || emailVerified !== true) return false;
+  const normalized = typeof email === 'string' ? email.toLowerCase().trim() : '';
+  if (!normalized || normalized !== AUTHORIZED_ADMIN_EMAIL) return false;
+  if (signInProvider !== 'google.com') return false;
+  return Array.isArray(providerData) && providerData.some(p => p?.providerId === 'google.com');
 }
 
 export function createSessionObserver({ subscribe, tokenResult, onChange, onError = () => {} }) {
@@ -25,7 +25,13 @@ export function createSessionObserver({ subscribe, tokenResult, onChange, onErro
       const claims = result?.claims || {};
       const signInProvider = result?.signInProvider || claims?.firebase?.sign_in_provider || null;
       const providerId = signInProvider || user.providerData?.find(p => p?.providerId)?.providerId || null;
-      const isAuthorizedAdmin = claims.admin === true && isGoogleAdminIdentity(user, signInProvider);
+      const isAuthorizedAdmin = isAuthorizedGoogleAdmin({
+        email: user.email,
+        emailVerified: user.emailVerified,
+        adminClaim: claims.admin,
+        signInProvider,
+        providerData: user.providerData,
+      });
       if (active && current === revision) {
         onChange({ user, admin: isAuthorizedAdmin, providerId, loading: false, error: null });
       }
@@ -54,7 +60,7 @@ export function authErrorMessage(error) {
     'auth/user-token-expired': 'Oturumunun süresi dolmuş. Yeniden giriş yapıp dene.',
     'auth/invalid-credential': 'Kimlik doğrulama yanıtı tamamlanamadı. İstersen yeniden dene.',
     'auth/missing-or-invalid-nonce': 'Giriş isteği zaman aşımına uğradı. İstersen yeniden deneyebilirsin.',
-    'auth/apple-revocation-failed': 'Apple bağlantı izni kaldırılamadığı için hesap silme tamamlanamadı. Birazdan aynı hesapla yeniden dene.',
+    'auth/apple-revocation-failed': 'Apple bağlantı izni doğrulanamadı veya kaldırılamadı. Aynı hesapla yeniden deneyebilirsin.',
     'auth/user-disabled': 'Bu hesabın Sofra oturumu kapatılmış. Siteyi misafir olarak gezebilirsin.',
     'auth/invalid-api-key': 'Giriş yapılandırması tamamlanamadı. Birazdan yeniden dene.',
     'auth/web-storage-unsupported': 'Tarayıcı oturum kaydına izin vermiyor. Normal bir sekmede yeniden dene.',

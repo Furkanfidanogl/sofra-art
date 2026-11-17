@@ -11,8 +11,8 @@ import { artworks, daily, moods, readings, quizQuestions, quizResults } from './
 import { escapeHTML as esc, readDemo, saveDemo, checkComment } from './demo-store.js';
 import { authConfigured, appleAuthConfigured, warmAuth, googleSignIn, appleSignIn, signOutCurrent, observeSession, reauthenticateForDeletion, revokeAppleAuthorization, deleteCurrentAccount } from './firebase.js';
 import { exportMyComments, removeMyComments, eraseAccountWorkflow } from './privacy-client.js';
-import { guestSession, authErrorMessage } from './auth-session.js';
-import { firstName, accountPresentation, commentNickname, accountGreeting, primaryAuthProvider, providerLabel, accountIdentityNote, accountButtonsHTML } from './account-presentation.js';
+import { guestSession, authErrorMessage, isAuthorizedGoogleAdmin } from './auth-session.js';
+import { firstName, accountPresentation, commentNickname, accountGreeting, activeAuthProvider, deletionConfirmCopy, accountIdentityNote, accountButtonsHTML } from './account-presentation.js';
 import { backendEnabled, getPublicContent, getAdminDashboard, submitComment, manageContent, uploadArtwork, getArtworkUrl, generateEditorial, manageMyData, backendErrorMessage } from './backend.js';
 import { validateEditorialContext, applyEditorialDraft, createEditorialController } from './editorial-client.js';
 
@@ -260,11 +260,14 @@ function renderQuiz() {
   openDialog('#quiz-dialog',`<div class="quiz-modal-body"><span class="eyebrow">RUH HÂLİNE BİR PENCERE · ${step+1}/3</span><div class="quiz-step" aria-label="${step+1}. soru, toplam 3">${quizQuestions.map((_,i)=>`<i class="${i<=step?'done':''}"></i>`).join('')}</div><h2>${esc(q.title)}</h2><div class="quiz-options">${q.options.map((o,i)=>`<button class="quiz-option" data-action="quiz-answer" data-id="${o.mood}"><span>${String.fromCharCode(65+i)}</span>${esc(o.text)}</button>`).join('')}</div>${step?`<button class="quiz-back" data-action="quiz-back">${icon('back')} Bir önceki soruya dön</button>`:''}<p class="quiz-fineprint">Doğru ya da yanlış cevap yok. İçinden geldiği gibi.</p></div>`);
 }
 
-const AUTHORIZED_ADMIN_EMAIL = 'fatihfidanogl@gmail.com';
 function isAdmin() {
-  const email = (user?.email || '').toLowerCase().trim();
-  const isGoogle = Array.isArray(user?.providerData) && user.providerData.some(p => p?.providerId === 'google.com');
-  return Boolean(user && user.emailVerified === true && session.admin && !session.loading && email === AUTHORIZED_ADMIN_EMAIL && isGoogle && (!session.providerId || session.providerId === 'google.com'));
+  return Boolean(user && !session.loading && session.admin && isAuthorizedGoogleAdmin({
+    email: user.email,
+    emailVerified: user.emailVerified,
+    adminClaim: session.admin,
+    signInProvider: session.providerId,
+    providerData: user.providerData,
+  }));
 }
 function syncAccountUI() {
   const account = accountPresentation(session);
@@ -438,7 +441,7 @@ document.addEventListener('click',async e=>{
   }
   if(action==='data-export' && user && backendEnabled()){
     if(dataBusy)return;
-    const owner=user,uid=owner.uid,provider=primaryAuthProvider(owner,session.providerId);dataBusy=true;b.disabled=true;b.textContent='Verilerin hazırlanıyor…';
+    const owner=user,uid=owner.uid,provider=activeAuthProvider(owner,session.providerId);dataBusy=true;b.disabled=true;b.textContent='Verilerin hazırlanıyor…';
     try{
       const comments=await exportMyComments({uid,request:manageMyData,isCurrent:()=>user?.uid===uid});
       if(user?.uid!==uid)throw new Error('ACCOUNT_CHANGED');
@@ -451,18 +454,18 @@ document.addEventListener('click',async e=>{
   }
   if(action==='data-delete-confirm' && user && !isAdmin() && !dataBusy){
     warmAuth();
-    const providerId=primaryAuthProvider(user,session.providerId),label=providerLabel(providerId);
-    const revokeNote=providerId==='apple.com'?' Sofra için verdiğin Apple oturum izni iptal edilir; Apple Hesabın silinmez.':' Google hesabın silinmez.';
-    openDialog('#account-dialog',`<div class="account-body"><h2>Sofra hesabını sil</h2><p>Bu sitedeki hesabın ve bekleyen, onaylı, gizlenmiş tüm yorumların silinecek.${revokeNote} Bu işlem geri alınamaz.</p><p>Devam etmeden ${esc(label)} ile kimliğini yeniden doğrulayacağız. İşlem yarıda kalırsa aynı hesaptan tekrar deneyebilirsin.</p><p>Yedekler ve servis güvenlik kayıtları kendi saklama süreleri sonunda kaldırılır. <a href="/gizlilik/">Ayrıntılar</a></p><div class="account-buttons"><button class="btn btn-primary" data-action="data-delete">${esc(label)} ile doğrula ve hesabımı sil</button><button class="btn" data-action="account">Vazgeç</button></div></div>`,'delete-account');return;
+    const copy=deletionConfirmCopy({user,sessionProviderId:session.providerId});
+    openDialog('#account-dialog',`<div class="account-body"><h2>Sofra hesabını sil</h2><p>Bu sitedeki hesabın ve bekleyen, onaylı, gizlenmiş tüm yorumların silinecek.${copy.revokeNote} Bu işlem geri alınamaz.</p><p>Devam etmeden ${esc(copy.label)} ile kimliğini yeniden doğrulayacağız. İşlem yarıda kalırsa aynı hesaptan tekrar deneyebilirsin.</p><p>Yedekler ve servis güvenlik kayıtları kendi saklama süreleri sonunda kaldırılır. <a href="/gizlilik/">Ayrıntılar</a></p><div class="account-buttons"><button class="btn btn-primary" data-action="data-delete">${esc(copy.buttonText)}</button><button class="btn" data-action="account">Vazgeç</button></div></div>`,'delete-account');return;
   }
   if(action==='data-delete' && user && !isAdmin() && backendEnabled()){
     if(dataBusy)return;
-    const uid=user.uid,providerId=primaryAuthProvider(user,session.providerId),label=providerLabel(providerId);
+    const uid=user.uid,copy=deletionConfirmCopy({user,sessionProviderId:session.providerId});
     dataBusy=true;authBusy=true;b.disabled=true;b.textContent='İşlemin sürüyor…';
     try{
       const erased=await eraseAccountWorkflow({
         uid,
-        providerId,
+        providerId:copy.providerId,
+        hasLinkedApple:copy.requiresAppleRevocation,
         isCurrent:()=>user?.uid===uid,
         reauthenticate:reauthenticateForDeletion,
         removeComments:currentUid=>removeMyComments({uid:currentUid,request:manageMyData,isCurrent:()=>user?.uid===currentUid}),
@@ -473,10 +476,10 @@ document.addEventListener('click',async e=>{
       try{browserStorage?.removeItem('sofra-art-demo-v1');sessionStorage.removeItem('sofra-nickname');}catch{}
       remotePending=[];remoteComments.clear();render();renderPlayer();
       if(document.querySelector('#account-dialog[open]')?.dataset.view==='delete-account')closeDialog(document.querySelector('#account-dialog'));
-      toast(erased.providerId==='apple.com'?'Sofra hesabın, yorumların ve Apple oturum iznin kaldırıldı. Apple Hesabın değişmedi.':'Sofra hesabın ve yorumların silindi. Google hesabın değişmedi.');
+      toast(erased.appleRevoked?'Sofra hesabın, yorumların ve Apple oturum iznin kaldırıldı.':'Sofra hesabın ve yorumların silindi. Google hesabın değişmedi.');
       refreshPublic('table',true).catch(()=>{});
     }catch(error){if(user?.uid===uid)toast(error?.code?.startsWith('auth/')?authErrorMessage(error):backendErrorMessage(error));}
-    finally{dataBusy=false;authBusy=false;if(b.isConnected){b.disabled=false;b.textContent=`${label} ile doğrula ve hesabımı sil`;}}
+    finally{dataBusy=false;authBusy=false;if(b.isConnected){b.disabled=false;b.textContent=copy.buttonText;}}
     return;
   }
   if(action==='ai-dismiss'){editorialCtrl.onDismissClick();return;}

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { createSessionObserver, authErrorMessage } from '../src/auth-session.js';
+import { createSessionObserver, authErrorMessage, isAuthorizedGoogleAdmin } from '../src/auth-session.js';
 const { requireUser, requireAdmin, verifyCallableAuth } = createRequire(import.meta.url)('../functions/authorization.cjs');
 const { prepareAdmin, grantAdmin } = createRequire(import.meta.url)('../functions/admin-access.cjs');
 class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } }
@@ -31,18 +31,31 @@ test('restored sessions and token refresh update role; truthy strings never gran
   assert.equal(h.states.at(-1).admin, false);
 });
 
-test('UI admin visibility rejects missing email, unverified email, and Apple sign-in even with admin claims', async () => {
-  const h = harness(async user => ({ claims: { admin: true }, signInProvider: user.providerData?.[0]?.providerId || null }));
+test('UI admin visibility rejects missing email, unverified email, missing provider, and Apple sign-in even with admin claims', async () => {
+  const h = harness(async user => ({
+    claims: { admin: true },
+    signInProvider: '_signInProvider' in user ? user._signInProvider : (user.providerData?.[0]?.providerId ?? null),
+  }));
   for (const invalidAdmin of [
     { uid: 'u1', email: '', emailVerified: true, providerData: [{ providerId: 'google.com' }] },
     { uid: 'u2', email: null, emailVerified: true, providerData: [{ providerId: 'google.com' }] },
     { uid: 'u3', email: 'fatihfidanogl@gmail.com', emailVerified: false, providerData: [{ providerId: 'google.com' }] },
     { uid: 'u4', email: 'fatihfidanogl@gmail.com', emailVerified: true, providerData: [{ providerId: 'apple.com' }] },
     { uid: 'u5', email: 'visitor@privaterelay.appleid.com', emailVerified: true, providerData: [{ providerId: 'apple.com' }] },
+    { uid: 'u6', email: 'fatihfidanogl@gmail.com', emailVerified: true, providerData: [{ providerId: 'google.com' }], _signInProvider: null },
+    { uid: 'u7', email: 'fatihfidanogl@gmail.com', emailVerified: true, providerData: [{ providerId: 'google.com' }], _signInProvider: '' },
+    { uid: 'u8', email: 'fatihfidanogl@gmail.com', emailVerified: true, providerData: [{ providerId: 'google.com' }], _signInProvider: 'apple.com' },
   ]) {
     await h.change(invalidAdmin);
     assert.equal(h.states.at(-1).admin, false, `Must reject admin UI for ${invalidAdmin.uid}`);
   }
+  assert.equal(isAuthorizedGoogleAdmin({
+    email: 'fatihfidanogl@gmail.com',
+    emailVerified: true,
+    adminClaim: true,
+    signInProvider: 'google.com',
+    providerData: [{ providerId: 'google.com' }],
+  }), true);
 });
 
 test('late token result cannot restore admin after logout, account switch or disposal', async () => {
@@ -78,20 +91,23 @@ test('server rejects guests, forged data roles, unverified emails, missing email
   }
   for (const token of [
     {},
-    { admin: 'true', email_verified: true, email: 'fatihfidanogl@gmail.com' },
-    { admin: true }, // missing email completely
-    { admin: true, email: '' }, // empty email
-    { admin: true, email_verified: false, email: 'fatihfidanogl@gmail.com' }, // unverified
-    { admin: false, email_verified: true, email: 'fatihfidanogl@gmail.com' }, // no admin claim despite email match
-    { email_verified: true, email: 'fatihfidanogl@gmail.com' }, // completely missing admin claim
+    { admin: 'true', email_verified: true, email: 'fatihfidanogl@gmail.com', firebase: { sign_in_provider: 'google.com' } },
+    { admin: true, firebase: { sign_in_provider: 'google.com' } }, // missing email completely
+    { admin: true, email: '', firebase: { sign_in_provider: 'google.com' } }, // empty email
+    { admin: true, email_verified: false, email: 'fatihfidanogl@gmail.com', firebase: { sign_in_provider: 'google.com' } }, // unverified
+    { admin: false, email_verified: true, email: 'fatihfidanogl@gmail.com', firebase: { sign_in_provider: 'google.com' } }, // no admin claim despite email match
+    { email_verified: true, email: 'fatihfidanogl@gmail.com', firebase: { sign_in_provider: 'google.com' } }, // completely missing admin claim
+    { admin: true, email_verified: true, email: 'fatihfidanogl@gmail.com' }, // missing firebase.sign_in_provider
+    { admin: true, email_verified: true, email: 'fatihfidanogl@gmail.com', firebase: { sign_in_provider: '' } }, // empty provider
+    { admin: true, email_verified: true, email: 'fatihfidanogl@gmail.com', firebase: { sign_in_provider: 'apple.com' } }, // apple provider
+    { admin: true, email_verified: true, email: 'fatihfidanogl@gmail.com', firebase: { sign_in_provider: 'password' } }, // password provider
   ]) {
     assert.throws(() => requireAdmin({ auth: { uid: 'user', token }, data: { admin: true } }, HttpsError), { code: 'permission-denied' });
   }
   assert.equal(requireUser({ auth: { uid: 'visitor', token: {} } }, HttpsError).uid, 'visitor');
-  assert.equal(requireAdmin({ auth: { uid: 'fatih', token: { admin: true, email_verified: true, email: 'fatihfidanogl@gmail.com' } } }, HttpsError).uid, 'fatih');
-  assert.throws(() => requireAdmin({ auth: { uid: 'fatih-apple', token: { admin: true, email_verified: true, email: 'fatihfidanogl@gmail.com', firebase: { sign_in_provider: 'apple.com' } } } }, HttpsError), { code: 'permission-denied' });
-  assert.throws(() => requireAdmin({ auth: { uid: 'furkan', token: { admin: true, email_verified: true, email: 'furkan7188a@gmail.com' } } }, HttpsError), { code: 'permission-denied' });
-  assert.throws(() => requireAdmin({ auth: { uid: 'attacker', token: { admin: true, email_verified: true, email: 'attacker@example.com' } } }, HttpsError), { code: 'permission-denied' });
+  assert.equal(requireAdmin({ auth: { uid: 'fatih', token: { admin: true, email_verified: true, email: 'fatihfidanogl@gmail.com', firebase: { sign_in_provider: 'google.com' } } } }, HttpsError).uid, 'fatih');
+  assert.throws(() => requireAdmin({ auth: { uid: 'furkan', token: { admin: true, email_verified: true, email: 'furkan7188a@gmail.com', firebase: { sign_in_provider: 'google.com' } } } }, HttpsError), { code: 'permission-denied' });
+  assert.throws(() => requireAdmin({ auth: { uid: 'attacker', token: { admin: true, email_verified: true, email: 'attacker@example.com', firebase: { sign_in_provider: 'google.com' } } } }, HttpsError), { code: 'permission-denied' });
 });
 
 test('callable pipeline accepts verified Apple users for user endpoints and blocks Apple admin escalation', async () => {
@@ -119,10 +135,10 @@ test('callable request pipeline performs zero role writes; matching email withou
     setCustomUserClaims: async () => { claimWrites++; },
     verifyIdToken: async (tokenStr) => {
       if (tokenStr === 'fatih-token-no-claims') {
-        return { uid: 'fatih-uid', email: 'fatihfidanogl@gmail.com', email_verified: true };
+        return { uid: 'fatih-uid', email: 'fatihfidanogl@gmail.com', email_verified: true, firebase: { sign_in_provider: 'google.com' } };
       }
       if (tokenStr === 'fatih-token-with-claims') {
-        return { uid: 'fatih-uid', email: 'fatihfidanogl@gmail.com', email_verified: true, admin: true };
+        return { uid: 'fatih-uid', email: 'fatihfidanogl@gmail.com', email_verified: true, admin: true, firebase: { sign_in_provider: 'google.com' } };
       }
       return { uid: 'visitor-uid', email: 'user@example.com', email_verified: true };
     }

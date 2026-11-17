@@ -22,9 +22,9 @@ function requireAdmin(request, HttpsError) {
     throw new HttpsError('permission-denied', 'Doğrulanmış Google hesabıyla giriş yap.');
   }
 
-  // 3) Reject non-Google sign-in providers when provider claim is present (e.g. apple.com)
+  // 3) Reject missing, empty, or non-Google sign-in providers
   const signInProvider = auth.token?.firebase?.sign_in_provider;
-  if (signInProvider && signInProvider !== 'google.com') {
+  if (signInProvider !== 'google.com') {
     throw new HttpsError('permission-denied', 'Yönetim işlemleri yalnızca yetkili Google hesabıyla yapılabilir.');
   }
 

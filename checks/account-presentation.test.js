@@ -6,6 +6,10 @@ import {
   commentNickname,
   accountGreeting,
   primaryAuthProvider,
+  activeAuthProvider,
+  hasLinkedAppleProvider,
+  deletionReauthProvider,
+  deletionConfirmCopy,
   providerLabel,
   accountIdentityNote,
   accountButtonsHTML,
@@ -55,4 +59,33 @@ test('accountButtonsHTML hides unconfigured Apple button and renders accessible 
   const busyApple = accountButtonsHTML({ user: null, pending: true, authConfigured: true, appleConfigured: true, isAdmin: false, authProviderBusy: 'apple.com' });
   assert.match(busyApple, /Apple penceresinde devam et/);
   assert.match(busyApple, /disabled/);
+});
+
+test('linked Google + Apple accounts separate session provider from required Apple deletion reauth/revocation', () => {
+  const googleOnly = { uid: 'g-1', email: 'g@example.com', providerData: [{ providerId: 'google.com' }] };
+  assert.equal(activeAuthProvider(googleOnly, 'google.com'), 'google.com');
+  assert.equal(hasLinkedAppleProvider(googleOnly, 'google.com'), false);
+  assert.equal(deletionReauthProvider(googleOnly, 'google.com'), 'google.com');
+  assert.equal(deletionConfirmCopy({ user: googleOnly, sessionProviderId: 'google.com' }).providerId, 'google.com');
+  assert.equal(deletionConfirmCopy({ user: googleOnly, sessionProviderId: 'google.com' }).requiresAppleRevocation, false);
+  assert.equal(deletionConfirmCopy({ user: googleOnly, sessionProviderId: 'google.com' }).buttonText, 'Google ile doğrula ve hesabımı sil');
+
+  const appleOnly = { uid: 'a-1', email: 'a@privaterelay.appleid.com', providerData: [{ providerId: 'apple.com' }] };
+  assert.equal(activeAuthProvider(appleOnly, 'apple.com'), 'apple.com');
+  assert.equal(hasLinkedAppleProvider(appleOnly, 'apple.com'), true);
+  assert.equal(deletionReauthProvider(appleOnly, 'apple.com'), 'apple.com');
+  assert.equal(deletionConfirmCopy({ user: appleOnly, sessionProviderId: 'apple.com' }).requiresAppleRevocation, true);
+  assert.equal(deletionConfirmCopy({ user: appleOnly, sessionProviderId: 'apple.com' }).buttonText, 'Apple ile doğrula ve hesabımı sil');
+
+  // Critical edge case: Google + Apple linked on same UID while active session signed in via Google
+  const linkedBoth = { uid: 'both-1', email: 'both@example.com', providerData: [{ providerId: 'google.com' }, { providerId: 'apple.com' }] };
+  assert.equal(activeAuthProvider(linkedBoth, 'google.com'), 'google.com');
+  assert.equal(hasLinkedAppleProvider(linkedBoth, 'google.com'), true);
+  assert.equal(deletionReauthProvider(linkedBoth, 'google.com'), 'apple.com');
+  assert.equal(accountIdentityNote(linkedBoth, 'google.com'), 'Google ile bağlı (Apple bağlı) · both@example.com');
+  const linkedCopy = deletionConfirmCopy({ user: linkedBoth, sessionProviderId: 'google.com' });
+  assert.equal(linkedCopy.providerId, 'apple.com');
+  assert.equal(linkedCopy.requiresAppleRevocation, true);
+  assert.equal(linkedCopy.buttonText, 'Apple ile doğrula ve hesabımı sil');
+  assert.match(linkedCopy.revokeNote, /Apple kimliği de bağlı/);
 });
