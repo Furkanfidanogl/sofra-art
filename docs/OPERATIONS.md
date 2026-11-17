@@ -54,7 +54,7 @@ Normal onay/inceleme tek istek kullanır. İlk `false` için ikinci bir ret doğ
 
 ## Domain geçişi
 
-README ve GitHub About URL’siyle birlikte Firebase yetkili domain, App Check, Functions CORS, CSP, canonical/OG/sitemap, HTTPS yönlendirmeleri ve uptime hedefini güncelle. Arama indeksleme engelini yalnız yayın kararıyla kaldır. Apple sağlayıcısı ayrı kurulum ve kabul gerektirir.
+README ve GitHub About URL’siyle birlikte Firebase yetkili domain, App Check, Functions CORS, CSP, canonical/OG/sitemap, HTTPS yönlendirmeleri ve uptime hedefini güncelle. Arama indeksleme engelini yalnız yayın kararıyla kaldır. Apple sağlayıcısı ayrı kurulum ve kabul gerektirir: Apple Developer Program üyeliğinde primary App ID ve web için Services ID oluştur; domain olarak `sofra-512816.firebaseapp.com`, return URL olarak `https://sofra-512816.firebaseapp.com/__/auth/handler` tanımla; `.p8` private key, Key ID, Team ID ve Services ID bilgilerini yalnızca Firebase Authentication `apple.com` sağlayıcı ayarına kaydet (asla Git’e veya `VITE_*` değişkenlerine koyma). Canlı OAuth akışı doğrulandıktan sonra Netlify production ortamında `VITE_APPLE_SIGNIN_ENABLED=true` ayarla.
 
 ## English operational summary
 

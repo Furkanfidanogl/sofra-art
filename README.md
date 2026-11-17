@@ -23,9 +23,9 @@ Ziyaretçi deneyiminin arkasında, içeriklerin taslak olarak hazırlandığı v
 - **Günün sofrası:** eser, söz, soru ve müzik; Türkiye saatine göre tarihli yayın planlama.
 - **Görsel odalar:** ruh hâli filtreleri, keşif testi, rastgele eser ve cihazda saklanan ayraçlar.
 - **Kesintisiz gezinme:** sayfada kalıcı müzik oynatıcısı ve açık tercihle yüklenen tek şarkılık Spotify bağlantıları.
-- **Özenli sohbet:** Google ile giriş, takma ad ve yorumu birlikte değerlendiren moderasyon, tekrar ve hız kontrolleri.
+- **Özenli sohbet:** Google ile giriş (Apple ile giriş istemci ve hesap yaşam döngüsü kod bazında hazır; canlı etkinleştirme Apple Developer/Firebase kurulumunu beklediği için şimdilik kapalı), takma ad ve yorumu birlikte değerlendiren moderasyon, tekrar ve hız kontrolleri.
 - **Editoryal yönetim:** özel görsel yükleme, önizleme, eser yayını ve yöneticiye yardımcı AI taslakları. Öneriler kendiliğinden yayımlanmaz.
-- **Veri kontrolü:** yorumlarını indirme, yeniden kimlik doğrulamasıyla hesabını ve yorumlarını silme.
+- **Veri kontrolü:** yorumlarını indirme, sağlayıcıya uygun yeniden kimlik doğrulaması ve (Apple hesabında) OAuth izin iptaliyle hesabını/yorumlarını silme.
 
 ### Görsel odalar
 
@@ -40,7 +40,7 @@ Ziyaretçi deneyiminin arkasında, içeriklerin taslak olarak hazırlandığı v
 | Katman / Layer | Teknoloji / Technology |
 | --- | --- |
 | Arayüz / Interface | JavaScript ES modules, Vite, CSS, native HTML dialogs |
-| Kimlik / Identity | Firebase Authentication, Google sign-in, App Check, reCAPTCHA Enterprise |
+| Kimlik / Identity | Firebase Authentication, Google sign-in (Apple sign-in client-ready), App Check, reCAPTCHA Enterprise |
 | Sunucu / Server | Node.js 22, Firebase Cloud Functions v2 |
 | Veri / Data | Cloud Firestore, transactions, indexes, private Cloud Storage |
 | Yapay zekâ / AI | Google Gemini **`gemini-3.5-flash-lite`** |
@@ -82,9 +82,9 @@ The public experience is backed by an editorial workspace. Content starts privat
 - **A daily table:** an artwork, reflection, question and song, with publication scheduled in the Istanbul time zone.
 - **Unhurried discovery:** mood filters, a short discovery quiz, random artwork and device-local bookmarks.
 - **Music while you browse:** a persistent player and optional, consent-based Spotify embeds restricted to individual tracks.
-- **Thoughtful conversation:** Google sign-in, nickname-aware moderation, duplicate detection and rate controls.
+- **Thoughtful conversation:** Google sign-in (Sign in with Apple client and lifecycle support implemented, disabled via flag until Apple Developer/Firebase setup is completed), nickname-aware moderation, duplicate detection and rate controls.
 - **Editorial tools:** private image uploads, previews, artwork publishing and AI writing suggestions that remain drafts until reviewed.
-- **Personal data controls:** comment export and account/comment deletion following recent authentication.
+- **Personal data controls:** comment export and account/comment deletion following provider-matched recent authentication (and Apple OAuth token revocation for Apple accounts).
 
 ## Architecture
 

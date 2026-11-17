@@ -28,7 +28,7 @@ export function backendErrorMessage(error) {
   if(error?.details?.reason==='duplicate-comment')return 'Bu yorumu bu sohbete zaten bıraktın.';
   if(error?.details?.reason==='rate-limit'){const seconds=Number(error.details.retryAfterSeconds);return Number.isFinite(seconds)&&seconds>0?`Biraz hızlı ilerliyoruz. ${Math.ceil(seconds)} saniye sonra yeniden dene.`:'Biraz bekleyip yeniden dene.';}
   if(error?.details?.reason==='account-deleting')return 'Hesabının silinmesi başlatılmış. Hesabım bölümünden işlemi tamamla.';
-  if(error?.details?.reason==='recent-login-required')return 'Hesabını silmeden önce Google ile yeniden doğrula.';
+  if(error?.details?.reason==='recent-login-required')return 'Hesabını silmeden önce kimliğini yeniden doğrula.';
   if(error?.details?.reason==='admin-account')return 'Yönetici hesabını silmeden önce yönetimi devretmelisin.';
   if(error?.code==='functions/invalid-argument' && error?.details?.field==='spotifyUrl')return 'Yalnızca tek bir Spotify şarkısının bağlantısını ekleyebilirsin.';
   if(error?.code==='functions/failed-precondition' && error?.details?.reason==='asset-in-use')return 'Bu görsel bir eserde kullanılıyor. Silmek için önce eserin görselini değiştir.';

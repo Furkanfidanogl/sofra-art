@@ -8,7 +8,7 @@ function requireRecentDeletion(token, now = Date.now()) {
   }
   const age = now / 1000 - token?.auth_time;
   if (!Number.isFinite(age) || age < -60 || age > 300) {
-    d.fail('failed-precondition', 'Hesabını silmeden önce Google ile yeniden doğrula.', { reason: 'recent-login-required' });
+    d.fail('failed-precondition', 'Hesabını silmeden önce kimliğini yeniden doğrula.', { reason: 'recent-login-required' });
   }
 }
 

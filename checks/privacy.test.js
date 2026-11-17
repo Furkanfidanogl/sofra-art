@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import {imageSource,imageAttributes} from '../src/responsive-image.js';
-import { exportMyComments, removeMyComments } from '../src/privacy-client.js';
+import { imageSource, imageAttributes } from '../src/responsive-image.js';
+import { exportMyComments, removeMyComments, eraseAccountWorkflow } from '../src/privacy-client.js';
 import { readSpotifyPreference, saveSpotifyPreference } from '../src/spotify-track.js';
 const require = createRequire(import.meta.url);
 const { requireRecentDeletion, createPrivacyService } = require('../functions/privacy.cjs');
@@ -13,6 +13,7 @@ test('browser configuration evaluates without a Node process global', () => {
   const source=fs.readFileSync(new URL('../src/firebase.js',import.meta.url),'utf8');
   const prefix=source.slice(0,source.indexOf('async function loadAuth()')).replace(/^import .*;$/mg,'').replaceAll('import.meta.env','({})').replaceAll('export ','');
   assert.equal(vm.runInNewContext(`${prefix}\nauthConfigured()`,{}),false);
+  assert.equal(vm.runInNewContext(`${prefix}\nappleAuthConfigured()`,{}),false);
 });
 
 test('the real Spotify renderer creates no external iframe before opt-in or after revocation', () => {
@@ -69,4 +70,80 @@ test('Spotify requires explicit opt-in and revocation survives a page reload', (
   saveSpotifyPreference(storage,true);assert.equal(readSpotifyPreference(storage),true);
   saveSpotifyPreference(storage,false);assert.equal(readSpotifyPreference(storage),false);
   assert.equal(readSpotifyPreference({getItem(){throw Error('unavailable')}}),false);
+});
+
+test('eraseAccountWorkflow enforces provider reauth, Apple OAuth revocation order, and stops on partial failure', async () => {
+  // 1. Apple happy path: reauth -> comments removed -> Apple token revoked -> Auth account deleted
+  const steps = [];
+  const appleResult = await eraseAccountWorkflow({
+    uid: 'apple-u1',
+    providerId: 'apple.com',
+    isCurrent: () => true,
+    reauthenticate: async (uid, providerId) => {
+      steps.push(['reauth', uid, providerId]);
+      return { uid, providerId: 'apple.com', appleAccessToken: 'apple-oauth-tok' };
+    },
+    removeComments: async uid => { steps.push(['removeComments', uid]); },
+    revokeAppleToken: async (uid, token) => { steps.push(['revokeApple', uid, token]); },
+    deleteAuthAccount: async uid => { steps.push(['deleteAuth', uid]); },
+  });
+  assert.deepEqual(appleResult, { providerId: 'apple.com', appleRevoked: true });
+  assert.deepEqual(steps, [
+    ['reauth', 'apple-u1', 'apple.com'],
+    ['removeComments', 'apple-u1'],
+    ['revokeApple', 'apple-u1', 'apple-oauth-tok'],
+    ['deleteAuth', 'apple-u1'],
+  ]);
+
+  // 2. Apple revocation failure MUST stop BEFORE deleteAuthAccount (no silent partial deletion)
+  let deletedAfterFail = false;
+  await assert.rejects(eraseAccountWorkflow({
+    uid: 'apple-u1',
+    providerId: 'apple.com',
+    isCurrent: () => true,
+    reauthenticate: async uid => ({ uid, providerId: 'apple.com', appleAccessToken: 'tok' }),
+    removeComments: async () => {},
+    revokeAppleToken: async () => { throw Object.assign(new Error('REVOCATION_FAIL'), { code: 'auth/apple-revocation-failed' }); },
+    deleteAuthAccount: async () => { deletedAfterFail = true; },
+  }), { code: 'auth/apple-revocation-failed' });
+  assert.equal(deletedAfterFail, false);
+
+  // 3. Missing Apple access token MUST stop BEFORE deleteAuthAccount
+  await assert.rejects(eraseAccountWorkflow({
+    uid: 'apple-u1',
+    providerId: 'apple.com',
+    isCurrent: () => true,
+    reauthenticate: async uid => ({ uid, providerId: 'apple.com', appleAccessToken: null }),
+    removeComments: async () => {},
+    revokeAppleToken: async () => {},
+    deleteAuthAccount: async () => { deletedAfterFail = true; },
+  }), { code: 'auth/apple-revocation-failed' });
+  assert.equal(deletedAfterFail, false);
+
+  // 4. UID mismatch or account switch during reauth stops BEFORE removing comments
+  let removedAfterSwitch = false;
+  await assert.rejects(eraseAccountWorkflow({
+    uid: 'apple-u1',
+    providerId: 'apple.com',
+    isCurrent: () => true,
+    reauthenticate: async () => ({ uid: 'other-uid', providerId: 'apple.com', appleAccessToken: 'tok' }),
+    removeComments: async () => { removedAfterSwitch = true; },
+    revokeAppleToken: async () => {},
+    deleteAuthAccount: async () => { deletedAfterFail = true; },
+  }), /ACCOUNT_CHANGED/);
+  assert.equal(removedAfterSwitch, false);
+
+  // 5. Google happy path does not call Apple revocation
+  const googleSteps = [];
+  const googleResult = await eraseAccountWorkflow({
+    uid: 'google-u1',
+    providerId: 'google.com',
+    isCurrent: () => true,
+    reauthenticate: async uid => { googleSteps.push('reauth'); return { uid, providerId: 'google.com', appleAccessToken: null }; },
+    removeComments: async () => { googleSteps.push('removeComments'); },
+    revokeAppleToken: async () => { throw new Error('Should not revoke Apple for Google user'); },
+    deleteAuthAccount: async () => { googleSteps.push('deleteAuth'); },
+  });
+  assert.deepEqual(googleResult, { providerId: 'google.com', appleRevoked: false });
+  assert.deepEqual(googleSteps, ['reauth', 'removeComments', 'deleteAuth']);
 });

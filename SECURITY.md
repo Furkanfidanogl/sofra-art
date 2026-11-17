@@ -7,10 +7,10 @@ Report suspected security issues privately to **fatihfidanogl@gmail.com**. Inclu
 ## Controls
 
 - Callables enforce App Check and the expected Firebase app identity. Protected operations independently verify ID tokens with revocation checks.
-- Administration requires the designated verified email and a server-issued `admin` claim. Browser state never grants server authority.
+- Administration requires the designated verified email, Google sign-in identity and a server-issued `admin` claim. Browser state never grants server authority and never loosens admin visibility for missing emails or Apple accounts.
 - Direct Firestore and Storage access is denied, including for signed-in administrators. Only published, sanitized images have a public gateway.
 - Uploads enforce file signatures, byte/pixel/dimension limits and WebP re-encoding. Visitor and AI text is escaped before HTML rendering.
-- Comment export/deletion binds to the verified UID. Deletion requires recent authentication and prevents late moderation from recreating removed comments.
+- Comment export/deletion binds to the verified UID. Deletion requires provider-matched recent authentication (`google.com` or `apple.com`), revokes Apple OAuth authorization tokens before account removal, and prevents late moderation from recreating removed comments.
 - Model failures and disagreement during rejection verification remain pending for review. Every provider request, including rejection verification, reserves the shared hourly quota transactionally. Both assessments share one timeout. User limits, idempotency and model quotas bound abuse; they are not a billing cap.
 
 ## Credentials and publication

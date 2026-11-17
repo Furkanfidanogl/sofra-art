@@ -26,3 +26,33 @@ export async function removeMyComments({ uid, request, isCurrent }) {
     complete = result.complete;
   } while (!complete);
 }
+
+// Execute reauthentication, Firestore cleanup, Apple OAuth revocation, and Auth deletion
+// in strict order so partial failures never masquerade as complete account erasure.
+export async function eraseAccountWorkflow({
+  uid,
+  providerId = null,
+  isCurrent,
+  reauthenticate,
+  removeComments,
+  revokeAppleToken,
+  deleteAuthAccount,
+}) {
+  if (!uid || !isCurrent()) throw new Error('ACCOUNT_CHANGED');
+  const reauth = await reauthenticate(uid, providerId);
+  if (!reauth || reauth.uid !== uid || !isCurrent()) throw new Error('ACCOUNT_CHANGED');
+  await removeComments(uid);
+  if (!isCurrent()) throw new Error('ACCOUNT_CHANGED');
+  const activeProvider = reauth.providerId || providerId;
+  let appleRevoked = false;
+  if (activeProvider === 'apple.com') {
+    if (typeof revokeAppleToken !== 'function' || !reauth.appleAccessToken) {
+      throw Object.assign(new Error('APPLE_REVOCATION_REQUIRED'), { code: 'auth/apple-revocation-failed' });
+    }
+    await revokeAppleToken(uid, reauth.appleAccessToken);
+    if (!isCurrent()) throw new Error('ACCOUNT_CHANGED');
+    appleRevoked = true;
+  }
+  await deleteAuthAccount(uid);
+  return { providerId: activeProvider, appleRevoked };
+}

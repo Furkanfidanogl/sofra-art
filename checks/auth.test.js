@@ -18,16 +18,31 @@ function harness(tokenResult) {
 
 test('restored sessions and token refresh update role; truthy strings never grant admin', async () => {
   let claims = { admin: true };
-  const h = harness(async () => ({ claims }));
-  const user = { uid: 'known-user' };
+  const h = harness(async () => ({ claims, signInProvider: 'google.com' }));
+  const user = { uid: 'known-user', email: 'fatihfidanogl@gmail.com', emailVerified: true, providerData: [{ providerId: 'google.com' }] };
   await h.change(user);
   assert.equal(h.states.at(-1).admin, true);
+  assert.equal(h.states.at(-1).providerId, 'google.com');
   claims = { admin: 'true' };
   await h.change(user);
   assert.equal(h.states.at(-1).admin, false);
   await h.change(null);
   assert.equal(h.states.at(-1).user, null);
   assert.equal(h.states.at(-1).admin, false);
+});
+
+test('UI admin visibility rejects missing email, unverified email, and Apple sign-in even with admin claims', async () => {
+  const h = harness(async user => ({ claims: { admin: true }, signInProvider: user.providerData?.[0]?.providerId || null }));
+  for (const invalidAdmin of [
+    { uid: 'u1', email: '', emailVerified: true, providerData: [{ providerId: 'google.com' }] },
+    { uid: 'u2', email: null, emailVerified: true, providerData: [{ providerId: 'google.com' }] },
+    { uid: 'u3', email: 'fatihfidanogl@gmail.com', emailVerified: false, providerData: [{ providerId: 'google.com' }] },
+    { uid: 'u4', email: 'fatihfidanogl@gmail.com', emailVerified: true, providerData: [{ providerId: 'apple.com' }] },
+    { uid: 'u5', email: 'visitor@privaterelay.appleid.com', emailVerified: true, providerData: [{ providerId: 'apple.com' }] },
+  ]) {
+    await h.change(invalidAdmin);
+    assert.equal(h.states.at(-1).admin, false, `Must reject admin UI for ${invalidAdmin.uid}`);
+  }
 });
 
 test('late token result cannot restore admin after logout, account switch or disposal', async () => {
@@ -74,8 +89,28 @@ test('server rejects guests, forged data roles, unverified emails, missing email
   }
   assert.equal(requireUser({ auth: { uid: 'visitor', token: {} } }, HttpsError).uid, 'visitor');
   assert.equal(requireAdmin({ auth: { uid: 'fatih', token: { admin: true, email_verified: true, email: 'fatihfidanogl@gmail.com' } } }, HttpsError).uid, 'fatih');
+  assert.throws(() => requireAdmin({ auth: { uid: 'fatih-apple', token: { admin: true, email_verified: true, email: 'fatihfidanogl@gmail.com', firebase: { sign_in_provider: 'apple.com' } } } }, HttpsError), { code: 'permission-denied' });
   assert.throws(() => requireAdmin({ auth: { uid: 'furkan', token: { admin: true, email_verified: true, email: 'furkan7188a@gmail.com' } } }, HttpsError), { code: 'permission-denied' });
   assert.throws(() => requireAdmin({ auth: { uid: 'attacker', token: { admin: true, email_verified: true, email: 'attacker@example.com' } } }, HttpsError), { code: 'permission-denied' });
+});
+
+test('callable pipeline accepts verified Apple users for user endpoints and blocks Apple admin escalation', async () => {
+  const mockAuth = {
+    verifyIdToken: async tokenStr => {
+      if (tokenStr === 'apple-visitor') {
+        return { uid: 'apple-uid-1', email: 'abc@privaterelay.appleid.com', email_verified: true, firebase: { sign_in_provider: 'apple.com' } };
+      }
+      if (tokenStr === 'apple-forged-admin') {
+        return { uid: 'apple-uid-2', email: 'fatihfidanogl@gmail.com', email_verified: true, admin: true, firebase: { sign_in_provider: 'apple.com' } };
+      }
+      return { uid: 'unverified-uid', email: 'u@example.com', email_verified: false };
+    }
+  };
+  const run = (bearer, kind) => verifyCallableAuth(kind, `Bearer ${bearer}`, { getAuth: () => mockAuth, HttpsError });
+  assert.equal(await run('apple-visitor', 'user'), 'apple-uid-1');
+  await assert.rejects(run('apple-visitor', 'admin'), { code: 'permission-denied' });
+  await assert.rejects(run('apple-forged-admin', 'admin'), { code: 'permission-denied' });
+  await assert.rejects(run('unverified', 'user'), { code: 'permission-denied' });
 });
 
 test('callable request pipeline performs zero role writes; matching email without claims never gains admin', async () => {
@@ -123,6 +158,10 @@ test('callable request pipeline performs zero role writes; matching email withou
 
 test('auth failures show fixed messages without exposing provider errors or tokens', () => {
   assert.match(authErrorMessage({ code:'auth/network-request-failed' }), /Bağlantı/);
+  assert.match(authErrorMessage({ code:'auth/account-exists-with-different-credential' }), /başka bir giriş yöntemiyle/);
+  assert.match(authErrorMessage({ code:'auth/user-mismatch' }), /eşleşmiyor/);
+  assert.match(authErrorMessage({ code:'auth/apple-revocation-failed' }), /Apple bağlantı izni/);
+  assert.match(authErrorMessage({ code:'auth/popup-blocked' }), /engelledi/);
   assert.equal(authErrorMessage({ message:'private-token', code:'unknown' }).includes('private-token'), false);
 });
 

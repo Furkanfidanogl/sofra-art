@@ -22,7 +22,13 @@ function requireAdmin(request, HttpsError) {
     throw new HttpsError('permission-denied', 'Doğrulanmış Google hesabıyla giriş yap.');
   }
 
-  // 3) The token must have admin === true claim explicitly signed by Firebase Admin SDK
+  // 3) Reject non-Google sign-in providers when provider claim is present (e.g. apple.com)
+  const signInProvider = auth.token?.firebase?.sign_in_provider;
+  if (signInProvider && signInProvider !== 'google.com') {
+    throw new HttpsError('permission-denied', 'Yönetim işlemleri yalnızca yetkili Google hesabıyla yapılabilir.');
+  }
+
+  // 4) The token must have admin === true claim explicitly signed by Firebase Admin SDK
   if (auth.token?.admin !== true) {
     throw new HttpsError('permission-denied', 'Bu işlem için yetkili yönetici hesabı gerekiyor.');
   }
@@ -38,7 +44,7 @@ async function verifyCallableAuth(kind, authHeader, { getAuth, HttpsError }) {
   const verified = { auth: { uid: token.uid, token } };
   const auth = (kind === 'admin' ? requireAdmin : requireUser)(verified, HttpsError);
   if (auth.token?.email_verified !== true) {
-    throw new HttpsError('permission-denied', 'Doğrulanmış Google hesabıyla giriş yap.');
+    throw new HttpsError('permission-denied', 'Doğrulanmış hesabınla giriş yap.');
   }
   return auth.uid;
 }

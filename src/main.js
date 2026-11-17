@@ -9,10 +9,10 @@ import { adminHTML } from './admin-panel.js';
 import { spotifyTrackUrl, readSpotifyPreference, saveSpotifyPreference } from './spotify-track.js';
 import { artworks, daily, moods, readings, quizQuestions, quizResults } from './content.js';
 import { escapeHTML as esc, readDemo, saveDemo, checkComment } from './demo-store.js';
-import { authConfigured, googleSignIn, googleSignOut, observeSession, reauthenticateForDeletion, deleteCurrentAccount } from './firebase.js';
-import { exportMyComments, removeMyComments } from './privacy-client.js';
+import { authConfigured, appleAuthConfigured, warmAuth, googleSignIn, appleSignIn, signOutCurrent, observeSession, reauthenticateForDeletion, revokeAppleAuthorization, deleteCurrentAccount } from './firebase.js';
+import { exportMyComments, removeMyComments, eraseAccountWorkflow } from './privacy-client.js';
 import { guestSession, authErrorMessage } from './auth-session.js';
-import { firstName, accountPresentation } from './account-presentation.js';
+import { firstName, accountPresentation, commentNickname, accountGreeting, primaryAuthProvider, providerLabel, accountIdentityNote, accountButtonsHTML } from './account-presentation.js';
 import { backendEnabled, getPublicContent, getAdminDashboard, submitComment, manageContent, uploadArtwork, getArtworkUrl, generateEditorial, manageMyData, backendErrorMessage } from './backend.js';
 import { validateEditorialContext, applyEditorialDraft, createEditorialController } from './editorial-client.js';
 
@@ -41,6 +41,7 @@ let lastSubmitted = 0;
 let user = null;
 let session = guestSession();
 let authBusy = false;
+let authProviderBusy = null;
 let dataBusy = false;
 let currentAdminTab = 'daily';
 let playing = false;
@@ -176,10 +177,11 @@ document.querySelectorAll('dialog').forEach(d => {
 function commentsHTML(id, question) {
   const pending = (backendEnabled()?remotePending:demo.comments).filter(c=>c.artId===id && c.status==='pending');
   return `<div class="comments"><h3>Sofrada bir söz de senden.</h3><p class="question-text">${esc(question)}</p><div class="notice">${backendEnabled()?'Sofra, birbirimize nezaketle alan açtığımız sakin bir sığınak. Paylaştığın düşünceler, ortamın huzurunu koruyan özenli bir süzgeçten geçerek masada yerini alır.':'Buraya bıraktığın notlar bu cihazda sana özel saklanır; diğer ziyaretçilere gösterilmez.'}</div><div class="approved-comments">${commentList(id).map(previewComment).join('') || '<p class="comment-empty">Bu görsel sana ne hissettirdi?</p>'}</div>${pending.map(c=>`<div class="pending-comment">${previewComment(c)}<small>${backendEnabled()?'Onay bekliyor':'Bu cihazda saklandı · Sana özel'}</small></div>`).join('')}
-    <form class="comment-form" data-form="comment" data-id="${id}" data-table-key="${esc(tableKey)}"><label><span class="field-label">Sofradaki adın</span><input class="input" name="name" required minlength="2" maxlength="32" placeholder="Bir takma ad seç" value="${esc(user?firstName(user.displayName):'')}" autocomplete="nickname" /></label><label><span class="field-label">Aklından geçen</span><textarea class="input" name="text" required minlength="1" maxlength="500" placeholder="Acele etmeden, içinden geldiği gibi…"></textarea></label><div class="form-bottom"><small>En fazla 500 karakter · Birbirimize nazik davranıyoruz.</small><button class="btn btn-primary" type="submit" ${backendEnabled()&&!user?'disabled':''}>${backendEnabled()&&!user?'Yazmak için giriş yap':'Sofraya bırak'} ${icon('send')}</button></div></form></div>`;
+    <form class="comment-form" data-form="comment" data-id="${id}" data-table-key="${esc(tableKey)}"><label><span class="field-label">Sofradaki adın</span><input class="input" name="name" required minlength="2" maxlength="32" placeholder="Bir takma ad seç" value="${esc(commentNickname(user))}" autocomplete="nickname" /></label><label><span class="field-label">Aklından geçen</span><textarea class="input" name="text" required minlength="1" maxlength="500" placeholder="Acele etmeden, içinden geldiği gibi…"></textarea></label><div class="form-bottom"><small>En fazla 500 karakter · Birbirimize nazik davranıyoruz.</small><button class="btn btn-primary" type="submit" ${backendEnabled()&&!user?'disabled':''}>${backendEnabled()&&!user?'Yazmak için giriş yap':'Sofraya bırak'} ${icon('send')}</button></div></form></div>`;
 }
 
 async function showArt(id) {
+  warmAuth();
   const revision=++viewRevision;
   if(!catalog.some(a=>a.id===id)){
     if(backendEnabled()) {
@@ -199,7 +201,7 @@ async function showArt(id) {
   openDialog('#detail-dialog', `${framedImage(art.image,art.alt,{className:'dialog-art-image'})}<div class="dialog-body"><span class="eyebrow">${esc(art.tag)}</span><h2>${esc(art.title)}</h2><p class="dialog-credit">${esc(art.credit)}${art.source?` · <a href="${esc(art.source)}" target="_blank" rel="noopener noreferrer">Görsel kaynağı ↗</a>`:''}</p><p>${esc(art.description)}</p><div class="dialog-actions"><button class="btn ${demo.saved.includes(art.id)?'btn-primary':''}" data-action="save-detail" data-id="${art.id}">${icon('bookmark')} ${demo.saved.includes(art.id)?'Kaydedildi':'Sonraya sakla'}</button><button class="text-link" data-action="share-art" data-id="${art.id}">${icon('share')} Bağlantıyı kopyala</button></div>${commentsHTML(art.id,art.question)}</div>`);
   refreshPublic(art.id).catch(error=>toast(backendErrorMessage(error)));
 }
-function showTable() { currentArtId=null;currentCommentId='table';openDialog('#detail-dialog',`<div class="dialog-body"><span class="eyebrow">GECE MASASI · GÜNÜN SORUSU</span><h2>${esc(getDaily().question||defaultQuestion)}</h2>${commentsHTML('table','Birbirimize nazik davranıyoruz. Bir cümle bile yeter.')}</div>`);refreshPublic('table').catch(error=>toast(backendErrorMessage(error))); }
+function showTable() { warmAuth(); currentArtId=null;currentCommentId='table';openDialog('#detail-dialog',`<div class="dialog-body"><span class="eyebrow">GECE MASASI · GÜNÜN SORUSU</span><h2>${esc(getDaily().question||defaultQuestion)}</h2>${commentsHTML('table','Birbirimize nazik davranıyoruz. Bir cümle bile yeter.')}</div>`);refreshPublic('table').catch(error=>toast(backendErrorMessage(error))); }
 function showReading(id) {
   const r=readings.find(r=>r.id===id);if(!r)return;
   currentArtId=null;currentCommentId=null;
@@ -261,7 +263,8 @@ function renderQuiz() {
 const AUTHORIZED_ADMIN_EMAIL = 'fatihfidanogl@gmail.com';
 function isAdmin() {
   const email = (user?.email || '').toLowerCase().trim();
-  return Boolean(user && user.emailVerified && session.admin && !session.loading && email === AUTHORIZED_ADMIN_EMAIL);
+  const isGoogle = Array.isArray(user?.providerData) && user.providerData.some(p => p?.providerId === 'google.com');
+  return Boolean(user && user.emailVerified === true && session.admin && !session.loading && email === AUTHORIZED_ADMIN_EMAIL && isGoogle && (!session.providerId || session.providerId === 'google.com'));
 }
 function syncAccountUI() {
   const account = accountPresentation(session);
@@ -274,7 +277,7 @@ function syncAccountUI() {
     if(account.loading)button.setAttribute('aria-label','Hesabın yükleniyor');else button.removeAttribute('aria-label');
   }
   const nickname = document.querySelector('[data-form="comment"] [name="name"]');
-  if (nickname && user && document.activeElement!==nickname) nickname.value=firstName(user.displayName);
+  if (nickname && document.activeElement!==nickname) nickname.value=commentNickname(user);
   const commentButton=document.querySelector('[data-form="comment"] button[type="submit"]');
   if(commentButton && backendEnabled()) {
     commentButton.disabled=!user || session.loading;
@@ -283,8 +286,11 @@ function syncAccountUI() {
   if (document.querySelector('#admin-dialog[open]') && !isAdmin()) document.querySelector('#admin-dialog').close();
 }
 function showAccount() {
+  warmAuth();
   const pending = session.loading || authBusy;
-  openDialog('#account-dialog',`<div class="account-body"><div class="brand">${brand}</div><h2>${user?'İyi ki geldin.':'Bir sandalye de sana.'}</h2><p>${user?`${esc(firstName(user.displayName))}, Sofra’ya hoş geldin.`:'Görselleri keşfet, müziğini aç, biraz kendinle kal. Gezinmek için hesap açman gerekmiyor.'}</p><div class="account-buttons">${user?`${isAdmin()?'<button class="btn btn-primary" data-action="admin">Yönetim masasına geç</button>':''}<button class="btn" data-action="signout" ${authBusy?'disabled':''}>${authBusy?'Çıkış yapılıyor…':'Hesabımdan çık'}</button>`:`<button class="google-button" data-action="google" ${!authConfigured()||pending?'disabled':''}><span class="google-g" aria-hidden="true">G</span>${pending?'Birazdan buradayız…':'Google ile bağlan'}</button>`}</div><div class="notice">Bir sandalye hep sana ayrılmış. Müziğini aç, odaları keşfet ve biraz kendine kal.</div><button class="guest-button" data-action="close">${user?'Sofraya dön':'Şimdilik misafir olayım'}</button></div>`,'account');
+  const identityNote = accountIdentityNote(user, session.providerId);
+  const buttons = accountButtonsHTML({ user, pending, authConfigured: authConfigured(), appleConfigured: appleAuthConfigured(), isAdmin: isAdmin(), authProviderBusy });
+  openDialog('#account-dialog',`<div class="account-body"><div class="brand">${brand}</div><h2>${user?'İyi ki geldin.':'Bir sandalye de sana.'}</h2><p>${esc(accountGreeting(user))}</p>${identityNote?`<p class="account-identity">${esc(identityNote)}</p>`:''}<div class="account-buttons">${buttons}</div><div class="notice">Bir sandalye hep sana ayrılmış. Müziğini aç, odaları keşfet ve biraz kendine kal.</div><button class="guest-button" data-action="close">${user?'Sofraya dön':'Şimdilik misafir olayım'}</button></div>`,'account');
   if(user && backendEnabled())document.querySelector('#account-dialog .account-buttons').insertAdjacentHTML('beforeend',`<button class="text-link" data-action="data-export" ${dataBusy?'disabled':''}>Yorumlarımı indir</button>${!isAdmin()?`<button class="text-link" data-action="data-delete-confirm" ${dataBusy?'disabled':''}>Hesabımı ve yorumlarımı sil</button>`:''}`);
   document.querySelector('#account-dialog .notice').insertAdjacentHTML('beforeend','<p><a class="text-link" href="/gizlilik/">Gizlilik ve verilerin</a></p>');
 }
@@ -410,27 +416,33 @@ document.addEventListener('click',async e=>{
   if(action==='quiz-back'){quizAnswers.pop();renderQuiz();}
   if(action==='quiz-discover'){document.querySelector('#quiz-dialog').close();currentMood=id;savedOnly=false;renderGallery();document.querySelector('#library').scrollIntoView({behavior:'smooth'});}
   if(action==='account')showAccount();
-  if(action==='google'){
+  if(action==='google' || action==='apple'){
     if(authBusy || session.loading)return;
-    if(!authConfigured()){toast('Google bağlantısı henüz yapılandırılmamış.');return;}
-    authBusy=true; b.disabled=true; b.setAttribute('aria-busy','true'); b.textContent='Google penceresinde devam et…';
-    try { await googleSignIn(); returnAfterSignIn(); toast('Sofraya hoş geldin.'); }
+    if(!authConfigured()){toast('Giriş bağlantısı henüz yapılandırılmamış.');return;}
+    if(action==='apple' && !appleAuthConfigured()){toast('Apple ile giriş şu an kullanılamıyor.');return;}
+    const providerId=action==='apple'?'apple.com':'google.com';
+    authBusy=true; authProviderBusy=providerId;
+    document.querySelectorAll('#account-dialog .account-buttons button').forEach(btn=>{btn.disabled=true;});
+    b.setAttribute('aria-busy','true');
+    b.textContent=action==='apple'?'Apple penceresinde devam et…':'Google penceresinde devam et…';
+    try { await (action==='apple'?appleSignIn():googleSignIn()); returnAfterSignIn(); toast('Sofraya hoş geldin.'); }
     catch(error) { toast(authErrorMessage(error)); }
-    finally { authBusy=false; if(document.querySelector('#account-dialog[open]')?.dataset.view==='account')showAccount(); }
+    finally { authBusy=false; authProviderBusy=null; if(document.querySelector('#account-dialog[open]')?.dataset.view==='account')showAccount(); }
   }
   if(action==='signout'){
     if(authBusy)return;
     authBusy=true; b.disabled=true;
-    try { await googleSignOut(); toast('Oturumun kapandı. Bir sandalye hep var.'); }
+    try { await signOutCurrent(); toast('Oturumun kapandı. Bir sandalye hep var.'); }
     catch(error) { toast(authErrorMessage(error)); }
     finally { authBusy=false; if(document.querySelector('#account-dialog[open]')?.dataset.view==='account')showAccount(); }
   }
   if(action==='data-export' && user && backendEnabled()){
     if(dataBusy)return;
-    const owner=user,uid=owner.uid;dataBusy=true;b.disabled=true;b.textContent='Verilerin hazırlanıyor…';
+    const owner=user,uid=owner.uid,provider=primaryAuthProvider(owner,session.providerId);dataBusy=true;b.disabled=true;b.textContent='Verilerin hazırlanıyor…';
     try{
       const comments=await exportMyComments({uid,request:manageMyData,isCurrent:()=>user?.uid===uid});
-      const blob=new Blob([JSON.stringify({exportedAt:new Date().toISOString(),account:{uid,name:owner.displayName,email:owner.email},comments},null,2)],{type:'application/json'});
+      if(user?.uid!==uid)throw new Error('ACCOUNT_CHANGED');
+      const blob=new Blob([JSON.stringify({exportedAt:new Date().toISOString(),account:{uid,provider,name:owner.displayName||null,email:owner.email||null},comments},null,2)],{type:'application/json'});
       const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='sofra-verilerim.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
       toast('Yorumların indirmeye hazır. Cihazındaki kaydettiklerin bu hesaba bağlı değil.');
     }catch(error){if(user?.uid===uid)toast(backendErrorMessage(error));}
@@ -438,24 +450,33 @@ document.addEventListener('click',async e=>{
     return;
   }
   if(action==='data-delete-confirm' && user && !isAdmin() && !dataBusy){
-    openDialog('#account-dialog',`<div class="account-body"><h2>Sofra hesabını sil</h2><p>Bu sitedeki hesabın ve bekleyen, onaylı, gizlenmiş tüm yorumların silinecek. Google hesabın silinmez. Bu işlem geri alınamaz.</p><p>Devam etmeden Google ile kimliğini yeniden doğrulayacağız. İşlem yarıda kalırsa aynı hesaptan tekrar deneyebilirsin.</p><p>Yedekler ve servis güvenlik kayıtları kendi saklama süreleri sonunda kaldırılır. <a href="/gizlilik/">Ayrıntılar</a></p><div class="account-buttons"><button class="btn btn-primary" data-action="data-delete">Google ile doğrula ve hesabımı sil</button><button class="btn" data-action="account">Vazgeç</button></div></div>`,'delete-account');return;
+    warmAuth();
+    const providerId=primaryAuthProvider(user,session.providerId),label=providerLabel(providerId);
+    const revokeNote=providerId==='apple.com'?' Sofra için verdiğin Apple oturum izni iptal edilir; Apple Hesabın silinmez.':' Google hesabın silinmez.';
+    openDialog('#account-dialog',`<div class="account-body"><h2>Sofra hesabını sil</h2><p>Bu sitedeki hesabın ve bekleyen, onaylı, gizlenmiş tüm yorumların silinecek.${revokeNote} Bu işlem geri alınamaz.</p><p>Devam etmeden ${esc(label)} ile kimliğini yeniden doğrulayacağız. İşlem yarıda kalırsa aynı hesaptan tekrar deneyebilirsin.</p><p>Yedekler ve servis güvenlik kayıtları kendi saklama süreleri sonunda kaldırılır. <a href="/gizlilik/">Ayrıntılar</a></p><div class="account-buttons"><button class="btn btn-primary" data-action="data-delete">${esc(label)} ile doğrula ve hesabımı sil</button><button class="btn" data-action="account">Vazgeç</button></div></div>`,'delete-account');return;
   }
   if(action==='data-delete' && user && !isAdmin() && backendEnabled()){
     if(dataBusy)return;
-    const uid=user.uid;dataBusy=true;authBusy=true;b.disabled=true;b.textContent='İşlemin sürüyor…';
+    const uid=user.uid,providerId=primaryAuthProvider(user,session.providerId),label=providerLabel(providerId);
+    dataBusy=true;authBusy=true;b.disabled=true;b.textContent='İşlemin sürüyor…';
     try{
-      const verifiedUid=await reauthenticateForDeletion();
-      if(verifiedUid!==uid || user?.uid!==uid)throw new Error('ACCOUNT_CHANGED');
-      await removeMyComments({uid,request:manageMyData,isCurrent:()=>user?.uid===uid});
-      await deleteCurrentAccount(uid);
+      const erased=await eraseAccountWorkflow({
+        uid,
+        providerId,
+        isCurrent:()=>user?.uid===uid,
+        reauthenticate:reauthenticateForDeletion,
+        removeComments:currentUid=>removeMyComments({uid:currentUid,request:manageMyData,isCurrent:()=>user?.uid===currentUid}),
+        revokeAppleToken:revokeAppleAuthorization,
+        deleteAuthAccount:deleteCurrentAccount,
+      });
       demo.saved=[];demo.comments=[];demo.daily={};
       try{browserStorage?.removeItem('sofra-art-demo-v1');sessionStorage.removeItem('sofra-nickname');}catch{}
       remotePending=[];remoteComments.clear();render();renderPlayer();
       if(document.querySelector('#account-dialog[open]')?.dataset.view==='delete-account')closeDialog(document.querySelector('#account-dialog'));
-      toast('Sofra hesabın ve yorumların silindi. Google hesabın değişmedi.');
+      toast(erased.providerId==='apple.com'?'Sofra hesabın, yorumların ve Apple oturum iznin kaldırıldı. Apple Hesabın değişmedi.':'Sofra hesabın ve yorumların silindi. Google hesabın değişmedi.');
       refreshPublic('table',true).catch(()=>{});
     }catch(error){if(user?.uid===uid)toast(error?.code?.startsWith('auth/')?authErrorMessage(error):backendErrorMessage(error));}
-    finally{dataBusy=false;authBusy=false;if(b.isConnected){b.disabled=false;b.textContent='Google ile doğrula ve hesabımı sil';}}
+    finally{dataBusy=false;authBusy=false;if(b.isConnected){b.disabled=false;b.textContent=`${label} ile doğrula ve hesabımı sil`;}}
     return;
   }
   if(action==='ai-dismiss'){editorialCtrl.onDismissClick();return;}
@@ -697,10 +718,10 @@ observeSession(next => {
   }
 }, code => {console.warn('Sofra session verification',code);toast('Oturum yetkisi doğrulanamadı. Yönetim işlemleri kapalı.');})
   .catch(() => {
-    session = { user: null, admin: false, loading: false, error: 'AUTH_UNAVAILABLE' };
+    session = { user: null, admin: false, providerId: null, loading: false, error: 'AUTH_UNAVAILABLE' };
     user = null; syncAccountUI();
     if(document.querySelector('#account-dialog[open]')?.dataset.view==='account')showAccount();
-    toast('Google oturumu yüklenemedi. Siteyi misafir olarak gezebilirsin.');
+    toast('Oturum bilgileri yüklenemedi. Siteyi misafir olarak gezebilirsin.');
   });
 
  document.addEventListener('change',e=>{
