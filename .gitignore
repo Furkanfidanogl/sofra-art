@@ -12,7 +12,6 @@ dist/
 *.pem
 *.cert
 *.crt
-*.[pP]8
 *.p12
 *.pfx
 *credential*.json

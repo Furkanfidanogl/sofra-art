@@ -52,13 +52,6 @@ Normal onay/inceleme tek istek kullanır. İlk `false` için ikinci bir ret doğ
 - Restore önce ayrı, uygulamaya bağlanmayan bir veritabanında denenir. `scripts/restore-check.cjs --inspect` ile başla; yazan aşamalar açık `SOFRA_RESTORE_CHECK=true` gerektirir. Araç yalnız benzersiz scratch hedefini siler.
 - Firestore yedeği Auth/Storage yedeği değildir. Gerçek kurtarmada indeks/IAM/TTL ve yedek sonrası silme taleplerini ayrıca uygula; veri bütünlüğünü doğrula.
 
-## Apple ile giriş
-
-1. Yetkili Apple Developer hesabında Sign in with Apple etkin primary App ID’ye web için bir Services ID bağla. Mevcut Firebase `authDomain` değeri `sofra-512816.firebaseapp.com`, return URL `https://sofra-512816.firebaseapp.com/__/auth/handler`. Site alan adını ve Firebase auth alan adını ilgili Apple kayıtlarında, site alan adını da Firebase Authentication yetkili alanlarında doğrula. [Apple web kurulumu](https://developer.apple.com/help/account/capabilities/configure-sign-in-with-apple-for-the-web/)
-2. Services ID, Team ID, Key ID ve `.p8` anahtarını Firebase Console → Authentication → Sign-in method → Apple ayarına gir. Anahtarı repo ve web kökü dışında tut. [Firebase kurulumu](https://firebase.google.com/docs/auth/web/apple)
-3. Firebase’de yetkili bir test adresinde Apple düğmesi etkin bir derlemeyle gerçek giriş, iptal ve oturum dönüşünü doğrula. Ardından production derlemesinde `VITE_APPLE_SIGNIN_ENABLED=true` ver. CLI ile hazır `dist/` yayımlanıyorsa değişkeni gerçek yerel build’e de geçir. Son paketin canlıda eşleştiğini ve Google girişinin çalıştığını kontrol et.
-4. Ayrı bir test Apple hesabıyla gizli e-posta, yeniden giriş, yorum ve veri indirme akışlarını dene. Hesap silme kabulünde yalnız silinmek üzere belirlenmiş test hesabını kullan. Apple yetkisinin, Firebase Auth hesabının ve yorumların kaldırıldığını ayrı ayrı kontrol et.
-
 ## Domain geçişi
 
 README ve GitHub About URL’siyle birlikte Firebase yetkili domain, App Check, Functions CORS, CSP, canonical/OG/sitemap, HTTPS yönlendirmeleri ve uptime hedefini güncelle. Arama indeksleme engelini yalnız yayın kararıyla kaldır.

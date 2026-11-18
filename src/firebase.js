@@ -1,6 +1,5 @@
 // Authentication, App Check and callable Functions only. Never import DB/Storage here.
 import { createSessionObserver } from './auth-session.js';
-import { activeAuthProvider, deletionReauthProvider, hasLinkedAppleProvider } from './account-presentation.js';
 
 const nodeEnv = typeof process === 'undefined' ? {} : (process.env || {});
 const readEnv = (viteVal, processVal) => viteVal ?? processVal;
@@ -16,7 +15,6 @@ const config = {
   appId: readEnv(import.meta.env?.VITE_FIREBASE_APP_ID, nodeEnv.VITE_FIREBASE_APP_ID),
 };
 export const authConfigured = () => Object.values(config).every(v => typeof v === 'string' && v.trim());
-export const appleAuthConfigured = () => authConfigured() && readEnv(import.meta.env?.VITE_APPLE_SIGNIN_ENABLED, nodeEnv.VITE_APPLE_SIGNIN_ENABLED) === 'true';
 
 async function loadAuth() {
   if (!authConfigured()) throw new Error('AUTH_NOT_CONFIGURED');
@@ -45,14 +43,6 @@ function createGoogleProvider(sdk) {
   return provider;
 }
 
-function createAppleProvider(sdk) {
-  const provider = new sdk.OAuthProvider('apple.com');
-  provider.addScope('email');
-  provider.addScope('name');
-  provider.setCustomParameters({ locale: 'tr' });
-  return provider;
-}
-
 export async function observeSession(onChange, onError) {
   if (!authConfigured()) {
     onChange({ user: null, admin: false, providerId: null, loading: false, error: null });
@@ -75,12 +65,11 @@ export async function observeSession(onChange, onError) {
   });
 }
 
-// Exported DI boundary so tests exercise the real provider/credential/revocation paths.
+// SDK dependency boundary for sign-in and account deletion tests.
 export function createAuthActions({
   loadAuth: resolveAuth,
   getLoadedAuth = () => null,
   hasAuthLoader = () => true,
-  isAppleEnabled = () => false,
 }) {
   const resolveContext = () => getLoadedAuth() || resolveAuth();
 
@@ -89,68 +78,25 @@ export function createAuthActions({
     return (await sdk.signInWithPopup(auth, createGoogleProvider(sdk))).user;
   }
 
-  async function appleSignIn() {
-    if (!isAppleEnabled()) {
-      throw Object.assign(new Error('APPLE_NOT_CONFIGURED'), { code: 'auth/operation-not-allowed' });
-    }
-    const { sdk, auth } = await resolveContext();
-    return (await sdk.signInWithPopup(auth, createAppleProvider(sdk))).user;
-  }
-
   async function signOutCurrent() {
     if (!hasAuthLoader() && !getLoadedAuth()) return;
     const { sdk, auth } = await resolveContext();
     await sdk.signOut(auth);
   }
 
-  async function reauthenticateForDeletion(expectedUid = null, preferredProviderId = null) {
+  async function reauthenticateForDeletion(expectedUid) {
     const { sdk, auth } = await resolveContext();
-    if (!auth.currentUser) throw Object.assign(new Error('NO_USER'), { code: 'auth/user-token-expired' });
-    if (expectedUid && auth.currentUser.uid !== expectedUid) throw new Error('ACCOUNT_CHANGED');
+    const user = auth.currentUser;
+    if (!user) throw Object.assign(new Error('NO_USER'), { code: 'auth/user-token-expired' });
+    if (!expectedUid || user.uid !== expectedUid) throw new Error('ACCOUNT_CHANGED');
 
-    const linkedApple = hasLinkedAppleProvider(auth.currentUser, preferredProviderId);
-    const resolvedProvider = deletionReauthProvider(auth.currentUser, preferredProviderId) || activeAuthProvider(auth.currentUser, preferredProviderId) || 'google.com';
-    if (resolvedProvider === 'apple.com' && !isAppleEnabled()) {
-      throw Object.assign(new Error('APPLE_NOT_CONFIGURED'), { code: 'auth/operation-not-allowed' });
-    }
-
-    const provider = resolvedProvider === 'apple.com' ? createAppleProvider(sdk) : createGoogleProvider(sdk);
-    const result = await sdk.reauthenticateWithPopup(auth.currentUser, provider);
-    if ((expectedUid && result?.user?.uid !== expectedUid) || (expectedUid && auth.currentUser?.uid !== expectedUid)) {
+    const result = await sdk.reauthenticateWithPopup(user, createGoogleProvider(sdk));
+    if (result?.user?.uid !== expectedUid || auth.currentUser?.uid !== expectedUid) {
       throw new Error('ACCOUNT_CHANGED');
     }
-
-    let appleAccessToken = null;
-    if (resolvedProvider === 'apple.com') {
-      const credential = sdk.OAuthProvider.credentialFromResult(result);
-      appleAccessToken = typeof credential?.accessToken === 'string' && credential.accessToken.trim()
-        ? credential.accessToken
-        : null;
-      if (!appleAccessToken) {
-        throw Object.assign(new Error('APPLE_REVOCATION_TOKEN_MISSING'), { code: 'auth/apple-revocation-failed' });
-      }
-    }
-
-    await sdk.getIdToken(auth.currentUser, true);
-    return {
-      uid: auth.currentUser.uid,
-      providerId: resolvedProvider,
-      requiresAppleRevocation: linkedApple || resolvedProvider === 'apple.com',
-      appleAccessToken,
-    };
-  }
-
-  async function revokeAppleAuthorization(expectedUid, appleAccessToken) {
-    const { sdk, auth } = await resolveContext();
-    if (!expectedUid || auth.currentUser?.uid !== expectedUid) throw new Error('ACCOUNT_CHANGED');
-    if (typeof appleAccessToken !== 'string' || !appleAccessToken.trim()) {
-      throw Object.assign(new Error('APPLE_REVOCATION_TOKEN_MISSING'), { code: 'auth/apple-revocation-failed' });
-    }
-    try {
-      await sdk.revokeAccessToken(auth, appleAccessToken);
-    } catch {
-      throw Object.assign(new Error('APPLE_REVOCATION_FAILED'), { code: 'auth/apple-revocation-failed' });
-    }
+    await sdk.getIdToken(user, true);
+    if (auth.currentUser?.uid !== expectedUid) throw new Error('ACCOUNT_CHANGED');
+    return expectedUid;
   }
 
   async function deleteCurrentAccount(expectedUid) {
@@ -161,10 +107,8 @@ export function createAuthActions({
 
   return {
     googleSignIn,
-    appleSignIn,
     signOutCurrent,
     reauthenticateForDeletion,
-    revokeAppleAuthorization,
     deleteCurrentAccount,
   };
 }
@@ -173,19 +117,14 @@ const defaultAuthActions = createAuthActions({
   loadAuth,
   getLoadedAuth: () => loadedAuth,
   hasAuthLoader: () => Boolean(authPromise || loadedAuth),
-  isAppleEnabled: appleAuthConfigured,
 });
 
 export const {
   googleSignIn,
-  appleSignIn,
   signOutCurrent,
   reauthenticateForDeletion,
-  revokeAppleAuthorization,
   deleteCurrentAccount,
 } = defaultAuthActions;
-
-export const googleSignOut = signOutCurrent;
 
 export const backendEnabled = () => readEnv(import.meta.env?.VITE_SOFRA_BACKEND_ENABLED, nodeEnv.VITE_SOFRA_BACKEND_ENABLED) === 'true';
 

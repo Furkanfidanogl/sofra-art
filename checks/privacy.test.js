@@ -14,7 +14,6 @@ test('browser configuration evaluates without a Node process global', () => {
   const source=fs.readFileSync(new URL('../src/firebase.js',import.meta.url),'utf8');
   const prefix=source.slice(0,source.indexOf('async function loadAuth()')).replace(/^import .*;$/mg,'').replaceAll('import.meta.env','({})').replaceAll('export ','');
   assert.equal(vm.runInNewContext(`${prefix}\nauthConfigured()`,{}),false);
-  assert.equal(vm.runInNewContext(`${prefix}\nappleAuthConfigured()`,{}),false);
 });
 
 test('the real Spotify renderer creates no external iframe before opt-in or after revocation', () => {
@@ -73,342 +72,60 @@ test('Spotify requires explicit opt-in and revocation survives a page reload', (
   assert.equal(readSpotifyPreference({getItem(){throw Error('unavailable')}}),false);
 });
 
-test('eraseAccountWorkflow enforces pre-checks before deleting any comments and covers linked/Google/Apple cases', async () => {
-  // 1. Valid Apple scenario: exact order & success
-  const steps = [];
-  const appleResult = await eraseAccountWorkflow({
-    uid: 'apple-u1',
-    providerId: 'apple.com',
-    hasLinkedApple: true,
-    isCurrent: () => true,
-    reauthenticate: async (uid, providerId) => {
-      steps.push(['reauth', uid, providerId]);
-      return { uid, providerId: 'apple.com', requiresAppleRevocation: true, appleAccessToken: 'apple-oauth-tok' };
-    },
-    removeComments: async uid => { steps.push(['removeComments', uid]); },
-    revokeAppleToken: async (uid, token) => { steps.push(['revokeApple', uid, token]); },
-    deleteAuthAccount: async uid => { steps.push(['deleteAuth', uid]); },
-  });
-  assert.deepEqual(appleResult, { providerId: 'apple.com', appleRevoked: true });
-  assert.deepEqual(steps, [
-    ['reauth', 'apple-u1', 'apple.com'],
-    ['removeComments', 'apple-u1'],
-    ['revokeApple', 'apple-u1', 'apple-oauth-tok'],
-    ['deleteAuth', 'apple-u1'],
-  ]);
-
-  // 2. null, empty, or whitespace Apple tokens MUST abort BEFORE removeComments/revoke/deleteAuthAccount
-  for (const badToken of [null, undefined, '', '   \t\n  ']) {
-    let removeCalls = 0, revokeCalls = 0, deleteCalls = 0;
-    await assert.rejects(eraseAccountWorkflow({
-      uid: 'apple-u1',
-      providerId: 'apple.com',
-      isCurrent: () => true,
-      reauthenticate: async uid => ({ uid, providerId: 'apple.com', appleAccessToken: badToken }),
-      removeComments: async () => { removeCalls++; },
-      revokeAppleToken: async () => { revokeCalls++; },
-      deleteAuthAccount: async () => { deleteCalls++; },
-    }), { code: 'auth/apple-revocation-failed' });
-    assert.equal(removeCalls, 0, `removeComments must not run for token=${JSON.stringify(badToken)}`);
-    assert.equal(revokeCalls, 0);
-    assert.equal(deleteCalls, 0);
-  }
-
-  // 3. Missing revokeAppleToken callback MUST fail BEFORE reauth or removeComments
-  {
-    let reauthCalls = 0, removeCalls = 0, deleteCalls = 0;
-    await assert.rejects(eraseAccountWorkflow({
-      uid: 'apple-u1',
-      providerId: 'apple.com',
-      hasLinkedApple: true,
-      isCurrent: () => true,
-      reauthenticate: async uid => { reauthCalls++; return { uid, providerId: 'apple.com', appleAccessToken: 'tok' }; },
-      removeComments: async () => { removeCalls++; },
-      deleteAuthAccount: async () => { deleteCalls++; },
-    }), { code: 'auth/apple-revocation-failed' });
-    assert.equal(reauthCalls, 0);
-    assert.equal(removeCalls, 0);
-    assert.equal(deleteCalls, 0);
-  }
-
-  // 4. Reauthentication cancel or UID mismatch MUST stop BEFORE removeComments
-  {
-    let removeCalls = 0, revokeCalls = 0, deleteCalls = 0;
-    await assert.rejects(eraseAccountWorkflow({
-      uid: 'apple-u1',
-      providerId: 'apple.com',
-      isCurrent: () => true,
-      reauthenticate: async () => { throw Object.assign(new Error('cancelled'), { code: 'auth/popup-closed-by-user' }); },
-      removeComments: async () => { removeCalls++; },
-      revokeAppleToken: async () => { revokeCalls++; },
-      deleteAuthAccount: async () => { deleteCalls++; },
-    }), { code: 'auth/popup-closed-by-user' });
-    assert.equal(removeCalls, 0);
-    assert.equal(revokeCalls, 0);
-    assert.equal(deleteCalls, 0);
-
-    await assert.rejects(eraseAccountWorkflow({
-      uid: 'apple-u1',
-      providerId: 'apple.com',
-      isCurrent: () => true,
-      reauthenticate: async () => ({ uid: 'other-uid', providerId: 'apple.com', appleAccessToken: 'tok' }),
-      removeComments: async () => { removeCalls++; },
-      revokeAppleToken: async () => { revokeCalls++; },
-      deleteAuthAccount: async () => { deleteCalls++; },
-    }), /ACCOUNT_CHANGED/);
-    assert.equal(removeCalls, 0);
-    assert.equal(revokeCalls, 0);
-    assert.equal(deleteCalls, 0);
-  }
-
-  // 5. Linked Google + Apple (session started via Google, hasLinkedApple: true) MUST force Apple reauth & revocation
-  {
-    const linkedSteps = [];
-    const linkedRes = await eraseAccountWorkflow({
-      uid: 'linked-u1',
-      providerId: 'google.com',
-      hasLinkedApple: true,
-      isCurrent: () => true,
-      reauthenticate: async (uid, providerId) => {
-        linkedSteps.push(['reauth', providerId]);
-        return { uid, providerId, appleAccessToken: 'linked-apple-tok' };
-      },
-      removeComments: async () => { linkedSteps.push(['removeComments']); },
-      revokeAppleToken: async (uid, token) => { linkedSteps.push(['revokeApple', token]); },
-      deleteAuthAccount: async () => { linkedSteps.push(['deleteAuth']); },
-    });
-    assert.deepEqual(linkedRes, { providerId: 'apple.com', appleRevoked: true });
-    assert.deepEqual(linkedSteps, [
-      ['reauth', 'apple.com'],
-      ['removeComments'],
-      ['revokeApple', 'linked-apple-tok'],
-      ['deleteAuth'],
-    ]);
-  }
-
-  // 6. Apple revocation network failure MUST preserve Firebase Auth account (no partial-success wipe)
-  {
-    let deleteCalls = 0;
-    const secretTok = 'apple-secret-access-token-xyz';
-    let caught;
-    try {
-      await eraseAccountWorkflow({
-        uid: 'apple-u1',
-        providerId: 'apple.com',
-        isCurrent: () => true,
-        reauthenticate: async uid => ({ uid, providerId: 'apple.com', appleAccessToken: secretTok }),
-        removeComments: async () => {},
-        revokeAppleToken: async () => { throw Object.assign(new Error('REVOCATION_NETWORK_FAIL'), { code: 'auth/apple-revocation-failed' }); },
-        deleteAuthAccount: async () => { deleteCalls++; },
-      });
-    } catch (err) {
-      caught = err;
-    }
-    assert.equal(caught?.code, 'auth/apple-revocation-failed');
-    assert.equal(String(caught?.message || '').includes(secretTok), false);
-    assert.equal(deleteCalls, 0);
-  }
-
-  // 7. Google-only happy path preserves existing non-Apple deletion flow
-  {
-    const googleSteps = [];
-    const googleResult = await eraseAccountWorkflow({
-      uid: 'google-u1',
-      providerId: 'google.com',
-      hasLinkedApple: false,
-      isCurrent: () => true,
-      reauthenticate: async (uid, providerId) => { googleSteps.push(['reauth', providerId]); return { uid, providerId: 'google.com', appleAccessToken: null }; },
-      removeComments: async () => { googleSteps.push(['removeComments']); },
-      revokeAppleToken: async () => { throw new Error('Should not revoke Apple for Google user'); },
-      deleteAuthAccount: async () => { googleSteps.push(['deleteAuth']); },
-    });
-    assert.deepEqual(googleResult, { providerId: 'google.com', appleRevoked: false });
-    assert.deepEqual(googleSteps, [['reauth', 'google.com'], ['removeComments'], ['deleteAuth']]);
-  }
-});
-
-test('real Firebase auth helpers (createAuthActions) handle provider selection, credentials, UID switches, flag gating, and revocation', async () => {
-  function makeHarness({
-    currentUser = { uid: 'u-1', providerData: [{ providerId: 'apple.com' }] },
-    appleEnabled = true,
-    hasCred = true,
-    credentialToken = 'fresh-apple-oauth-token',
-    reauthUidOverride = null,
-    revokeShouldFail = false,
-  } = {}) {
+test('Google authentication and deletion use the initiating account throughout', async () => {
+  const owner = { uid: 'owner' };
+  const other = { uid: 'other' };
+  for (const interruption of [null, 'cancel', 'wrong-popup-user', 'token-refresh', 'cleanup']) {
     const calls = [];
-    let activeUser = currentUser;
-    class FakeGoogleAuthProvider {
-      constructor() { this.providerId = 'google.com'; this.params = {}; }
-      setCustomParameters(p) { this.params = p; }
+    const auth = { currentUser: owner };
+    class GoogleAuthProvider {
+      setCustomParameters(params) { assert.equal(params.prompt, 'select_account'); }
     }
-    class FakeOAuthProvider {
-      constructor(providerId) { this.providerId = providerId; this.scopes = []; this.params = {}; }
-      addScope(s) { this.scopes.push(s); }
-      setCustomParameters(p) { this.params = p; }
-      static credentialFromResult(result) { return result?._cred || null; }
-    }
-    const auth = {
-      get currentUser() { return activeUser; },
-    };
     const sdk = {
-      GoogleAuthProvider: FakeGoogleAuthProvider,
-      OAuthProvider: FakeOAuthProvider,
-      signInWithPopup: async (_auth, provider) => {
-        calls.push(['signInWithPopup', provider.providerId, provider.scopes || []]);
-        return { user: activeUser };
+      GoogleAuthProvider,
+      async signInWithPopup(instance, provider) {
+        assert.equal(instance, auth);
+        assert.ok(provider instanceof GoogleAuthProvider);
+        return { user: owner };
       },
-      signOut: async () => { calls.push(['signOut']); activeUser = null; },
-      reauthenticateWithPopup: async (user, provider) => {
-        calls.push(['reauthenticateWithPopup', user.uid, provider.providerId, provider.scopes || []]);
-        if (reauthUidOverride) activeUser = { ...user, uid: reauthUidOverride };
-        return {
-          user: activeUser,
-          _cred: hasCred ? { accessToken: credentialToken, providerId: provider.providerId } : null,
-        };
+      async reauthenticateWithPopup(user, provider) {
+        assert.equal(user, owner);
+        assert.ok(provider instanceof GoogleAuthProvider);
+        calls.push('reauthenticate');
+        if (interruption === 'cancel') throw new Error('POPUP_CANCELLED');
+        return { user: interruption === 'wrong-popup-user' ? other : owner };
       },
-      getIdToken: async (user, force) => { calls.push(['getIdToken', user.uid, force]); return 'fresh-jwt'; },
-      revokeAccessToken: async (_auth, token) => {
-        calls.push(['revokeAccessToken', token]);
-        if (revokeShouldFail) throw new Error('raw-provider-error ' + token);
+      async getIdToken(user, forceRefresh) {
+        assert.equal(user, owner);
+        assert.equal(forceRefresh, true);
+        calls.push('refresh');
+        if (interruption === 'token-refresh') auth.currentUser = other;
       },
-      deleteUser: async user => { calls.push(['deleteUser', user.uid]); },
+      async deleteUser(user) {
+        assert.equal(user, owner);
+        calls.push('delete account');
+      },
     };
-    const actions = createAuthActions({
-      loadAuth: async () => ({ sdk, auth }),
-      getLoadedAuth: () => ({ sdk, auth }),
-      isAppleEnabled: () => appleEnabled,
+    const actions = createAuthActions({ loadAuth: async () => ({ sdk, auth }) });
+    assert.equal(await actions.googleSignIn(), owner);
+    const workflow = eraseAccountWorkflow({
+      uid: owner.uid,
+      isCurrent: () => auth.currentUser?.uid === owner.uid,
+      reauthenticate: actions.reauthenticateForDeletion,
+      removeComments: async uid => {
+        assert.equal(uid, owner.uid);
+        calls.push('remove comments');
+        if (interruption === 'cleanup') auth.currentUser = other;
+      },
+      deleteAuthAccount: actions.deleteCurrentAccount,
     });
-    return { actions, calls, setUser: next => { activeUser = next; } };
-  }
-
-  // 1. Apple feature flag disabled -> appleSignIn & Apple/linked reauth fail closed BEFORE popup or comment deletion
-  {
-    const h = makeHarness({ appleEnabled: false });
-    await assert.rejects(h.actions.appleSignIn(), { code: 'auth/operation-not-allowed' });
-    let removed = 0;
-    await assert.rejects(eraseAccountWorkflow({
-      uid: 'u-1',
-      providerId: 'apple.com',
-      hasLinkedApple: true,
-      isCurrent: () => true,
-      reauthenticate: h.actions.reauthenticateForDeletion,
-      removeComments: async () => { removed++; },
-      revokeAppleToken: h.actions.revokeAppleAuthorization,
-      deleteAuthAccount: h.actions.deleteCurrentAccount,
-    }), { code: 'auth/operation-not-allowed' });
-    assert.equal(removed, 0);
-    assert.equal(h.calls.length, 0);
-  }
-
-  // 2. Linked [google.com, apple.com] user currently signed in with Google -> forces Apple popup + Apple revocation!
-  {
-    const h = makeHarness({
-      currentUser: { uid: 'linked-1', providerData: [{ providerId: 'google.com' }, { providerId: 'apple.com' }] },
-      appleEnabled: true,
-      credentialToken: 'real-apple-access-tok',
-    });
-    const res = await eraseAccountWorkflow({
-      uid: 'linked-1',
-      providerId: 'google.com', // active session was google.com
-      hasLinkedApple: true,
-      isCurrent: () => true,
-      reauthenticate: h.actions.reauthenticateForDeletion,
-      removeComments: async () => { h.calls.push(['removeComments', 'linked-1']); },
-      revokeAppleToken: h.actions.revokeAppleAuthorization,
-      deleteAuthAccount: h.actions.deleteCurrentAccount,
-    });
-    assert.deepEqual(res, { providerId: 'apple.com', appleRevoked: true });
-    assert.deepEqual(h.calls, [
-      ['reauthenticateWithPopup', 'linked-1', 'apple.com', ['email', 'name']],
-      ['getIdToken', 'linked-1', true],
-      ['removeComments', 'linked-1'],
-      ['revokeAccessToken', 'real-apple-access-tok'],
-      ['deleteUser', 'linked-1'],
-    ]);
-  }
-
-  // 3. Missing or whitespace Apple credential token -> real reauthenticateForDeletion aborts BEFORE removeComments
-  for (const opts of [{ hasCred: false }, { credentialToken: null }, { credentialToken: '' }, { credentialToken: '   ' }]) {
-    const h = makeHarness(opts);
-    let removed = 0;
-    await assert.rejects(eraseAccountWorkflow({
-      uid: 'u-1',
-      providerId: 'apple.com',
-      hasLinkedApple: true,
-      isCurrent: () => true,
-      reauthenticate: h.actions.reauthenticateForDeletion,
-      removeComments: async () => { removed++; },
-      revokeAppleToken: h.actions.revokeAppleAuthorization,
-      deleteAuthAccount: h.actions.deleteCurrentAccount,
-    }), { code: 'auth/apple-revocation-failed' });
-    assert.equal(removed, 0);
-    assert.equal(h.calls.some(c => c[0] === 'deleteUser'), false);
-  }
-
-  // 4. UID switch during reauthentication -> real helper throws ACCOUNT_CHANGED and stops BEFORE removeComments
-  {
-    const h = makeHarness({ reauthUidOverride: 'u-2' });
-    let removed = 0;
-    await assert.rejects(eraseAccountWorkflow({
-      uid: 'u-1',
-      providerId: 'apple.com',
-      hasLinkedApple: true,
-      isCurrent: () => true,
-      reauthenticate: h.actions.reauthenticateForDeletion,
-      removeComments: async () => { removed++; },
-      revokeAppleToken: h.actions.revokeAppleAuthorization,
-      deleteAuthAccount: h.actions.deleteCurrentAccount,
-    }), /ACCOUNT_CHANGED/);
-    assert.equal(removed, 0);
-    assert.equal(h.calls.some(c => c[0] === 'deleteUser'), false);
-  }
-
-  // 5. Real revokeAccessToken throws -> wrapped as auth/apple-revocation-failed (token stripped) and deleteUser NOT called
-  {
-    const h = makeHarness({ credentialToken: 'sensitive-token-abc', revokeShouldFail: true });
-    let errCaught;
-    try {
-      await eraseAccountWorkflow({
-        uid: 'u-1',
-        providerId: 'apple.com',
-        hasLinkedApple: true,
-        isCurrent: () => true,
-        reauthenticate: h.actions.reauthenticateForDeletion,
-        removeComments: async () => { h.calls.push(['removeComments']); },
-        revokeAppleToken: h.actions.revokeAppleAuthorization,
-        deleteAuthAccount: h.actions.deleteCurrentAccount,
-      });
-    } catch (err) {
-      errCaught = err;
+    if (!interruption) {
+      await workflow;
+      assert.deepEqual(calls, ['reauthenticate', 'refresh', 'remove comments', 'delete account']);
+    } else {
+      await assert.rejects(workflow, interruption === 'cancel' ? /POPUP_CANCELLED/ : /ACCOUNT_CHANGED/);
+      assert.equal(calls.includes('remove comments'), interruption === 'cleanup');
+      assert.equal(calls.includes('delete account'), false);
     }
-    assert.equal(errCaught?.code, 'auth/apple-revocation-failed');
-    assert.equal(String(errCaught?.message || '').includes('sensitive-token-abc'), false);
-    assert.equal(h.calls.some(c => c[0] === 'deleteUser'), false);
-  }
-
-  // 6. Google-only user through real helpers -> Google reauth, removeComments, deleteUser, zero revokeAccessToken
-  {
-    const h = makeHarness({
-      currentUser: { uid: 'g-only', providerData: [{ providerId: 'google.com' }] },
-      appleEnabled: false,
-    });
-    const res = await eraseAccountWorkflow({
-      uid: 'g-only',
-      providerId: 'google.com',
-      hasLinkedApple: false,
-      isCurrent: () => true,
-      reauthenticate: h.actions.reauthenticateForDeletion,
-      removeComments: async () => { h.calls.push(['removeComments', 'g-only']); },
-      revokeAppleToken: h.actions.revokeAppleAuthorization,
-      deleteAuthAccount: h.actions.deleteCurrentAccount,
-    });
-    assert.deepEqual(res, { providerId: 'google.com', appleRevoked: false });
-    assert.deepEqual(h.calls, [
-      ['reauthenticateWithPopup', 'g-only', 'google.com', []],
-      ['getIdToken', 'g-only', true],
-      ['removeComments', 'g-only'],
-      ['deleteUser', 'g-only'],
-    ]);
   }
 });

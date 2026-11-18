@@ -47,20 +47,19 @@ export function createSessionObserver({ subscribe, tokenResult, onChange, onErro
 
 export function authErrorMessage(error) {
   return ({
-    'auth/unauthorized-domain': 'Bu adres için giriş sağlayıcısı henüz açılmamış. Misafir olarak gezebilirsin.',
+    'auth/unauthorized-domain': 'Bu adres için Google ile giriş henüz açılmamış. Misafir olarak gezebilirsin.',
     'auth/popup-blocked': 'Tarayıcı giriş penceresini engelledi. Açılır pencerelere izin verip yeniden dene; uygulama içi tarayıcıdaysan sayfayı tarayıcında aç.',
     'auth/popup-closed-by-user': 'Giriş penceresi kapandı. İstersen yeniden deneyebilirsin.',
     'auth/cancelled-popup-request': 'Önceki giriş penceresi kapandı. Son açılan pencereyle devam et.',
     'auth/network-request-failed': 'Bağlantı kurulamadı. İnternetini kontrol edip yeniden dene.',
-    'auth/operation-not-allowed': 'Bu giriş yöntemi şu an kullanılamıyor. Diğer yöntemi deneyebilir veya misafir olarak devam edebilirsin.',
-    'auth/account-exists-with-different-credential': 'Bu e-posta adresi Sofra’da başka bir giriş yöntemiyle kayıtlı. Önceki giriş yönteminle devam edebilirsin.',
+    'auth/operation-not-allowed': 'Google ile giriş şu an kullanılamıyor. Misafir olarak devam edebilirsin.',
+    'auth/account-exists-with-different-credential': 'Bu hesapla giriş yapılamadı. Farklı bir Google hesabı deneyebilir veya destekle iletişime geçebilirsin.',
     'auth/credential-already-in-use': 'Bu hesap bilgisi başka bir Sofra hesabına bağlı.',
     'auth/user-mismatch': 'Seçtiğin hesap şu an açık olan Sofra hesabınla eşleşmiyor. Doğrulamayı aynı hesapla yap.',
     'auth/requires-recent-login': 'Güvenlik için hesabını yeniden doğrulaman gerekiyor.',
     'auth/user-token-expired': 'Oturumunun süresi dolmuş. Yeniden giriş yapıp dene.',
     'auth/invalid-credential': 'Kimlik doğrulama yanıtı tamamlanamadı. İstersen yeniden dene.',
     'auth/missing-or-invalid-nonce': 'Giriş isteği zaman aşımına uğradı. İstersen yeniden deneyebilirsin.',
-    'auth/apple-revocation-failed': 'Apple bağlantı izni doğrulanamadı veya kaldırılamadı. Aynı hesapla yeniden deneyebilirsin.',
     'auth/user-disabled': 'Bu hesabın Sofra oturumu kapatılmış. Siteyi misafir olarak gezebilirsin.',
     'auth/invalid-api-key': 'Giriş yapılandırması tamamlanamadı. Birazdan yeniden dene.',
     'auth/web-storage-unsupported': 'Tarayıcı oturum kaydına izin vermiyor. Normal bir sekmede yeniden dene.',
