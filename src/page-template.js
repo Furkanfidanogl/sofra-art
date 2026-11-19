@@ -2,6 +2,9 @@ import {moods,readings} from './content.js';
 import {escapeHTML as esc} from './demo-store.js';
 import {imageSource,imageAttributes,HERO_SIZES} from './responsive-image.js';
 import {icon,brand} from './icons.js';
+
+const pinterestUrl = 'https://tr.pinterest.com/SofraVibes/';
+
 export function pageTemplate({d,art,account,dateLabel,playing=false,savedOnly=false,savedCount=0,currentMood='all',backend=false,defaultQuestion='Bugün sana iyi gelen küçücük şey neydi?'}){
   return `
     <header class="site-header"><div class="wrap header-inner">
@@ -14,12 +17,15 @@ export function pageTemplate({d,art,account,dateLabel,playing=false,savedOnly=fa
       <button class="icon-button mobile-menu" data-action="menu" aria-label="Menüyü aç" aria-expanded="false">${icon('menu')}</button></div>
     </div></header>
     <main id="main" class="wrap">
-      <div class="intro-line"><span><i class="dot"></i>KENDİNE KÜÇÜK BİR MOLA VER.</span><span class="intro-right">${esc(dateLabel)} <span aria-hidden="true">/</span> İLK SOFRA</span></div>
+      <div class="intro-line">
+        <span class="intro-right"><i class="dot" aria-hidden="true"></i>${esc(dateLabel)} <span aria-hidden="true">/</span> İLK SOFRA</span>
+        <a class="intro-pinterest" href="${pinterestUrl}" target="_blank" rel="noopener noreferrer" aria-label="Sofra Art Pinterest (yeni sekme)">Pinterest ${icon('arrow')}</a>
+      </div>
       <section class="hero" aria-label="Günün Dozu">
         <img src="${esc(imageSource(art.image))}" ${imageAttributes(art.image,HERO_SIZES)} alt="${esc(art.alt)}" fetchpriority="high" decoding="async" />
         <div class="hero-content"><div class="hero-kicker">${icon('star')} GÜNÜN DOZU · NO. 001</div>
           <h1>Biraz dur.<br><em>Bir şey hisset.</em></h1>
-          <p class="hero-description">Dışarısı biraz bekleyebilir.<br>Sanat, müzik ve küçük keşiflerle<br>kendine bir sandalye çek.</p>
+          <p class="hero-description">Sanat, müzik ve kısa okumalar için küçük bir mola. Günün eserini keşfet, şarkısını dinle, Gece Masası’na bir not bırak.</p>
           <div class="hero-buttons"><a class="btn btn-primary" href="#night">Sofraya göz at ${icon('down')}</a><button class="btn btn-ghost" data-action="random">Beni şaşırt ${icon('arrow')}</button></div>
           <a class="hero-scroll" href="#daily">${icon('down')} BUGÜNÜN SOFRASINDA NE VAR?</a>
         </div>
@@ -43,6 +49,6 @@ export function pageTemplate({d,art,account,dateLabel,playing=false,savedOnly=fa
       <section id="reading" class="reading-section"><div class="section-heading"><div><span class="eyebrow">KARANLIK KÜTÜPHANE · OKUMA ODASI</span><h2>Bir fincanlık okumalar.</h2><p>Uzun günlere, kısa düşünceler.</p></div><span class="pill">1–2 dakikalık molalar</span></div>
       <div class="reading-grid">${readings.map((r,i)=>`<button class="reading-card" data-action="reading" data-id="${r.id}"><div class="reading-category">${esc(r.category)}<span>0${i+1} / ${r.time}</span></div><h3>${esc(r.title)}</h3><p>${esc(r.intro)}</p><span class="text-link">Biraz oku ${icon('arrow')}</span></button>`).join('')}</div></section>
       <section class="manifesto" aria-label="Sofra hakkında"><span class="star" aria-hidden="true">✳</span><h2>Herkesin bir yere yetiştiği dünyada,<br><em>burası biraz durmak için.</em></h2><p>Sofra, bir görüntünün, bir şarkının ya da tek bir cümlenin<br>günü değiştirebileceğine inanan küçük bir köşe.<br>İyi ki uğradın. Bir sandalye hep var.</p></section>
-      <footer class="site-footer"><div class="footer-brand"><a href="#main" class="brand" aria-label="Başa dön">${brand}</a><p>Sanat. Müzik. Biraz da kendin.</p></div><div><div class="footer-links"><a href="https://tr.pinterest.com/SofraVibes/" target="_blank" rel="noopener noreferrer">Pinterest ${icon('arrow')}</a><button data-action="about">Sofra hakkında</button><a href="/gizlilik/">Gizlilik ve verilerin</a><button data-action="spotify-settings">Müzik tercihleri</button></div><p class="footer-bottom">SOFRA ART · SANAT. MÜZİK. BİRAZ DA KENDİN.</p></div></footer>
+      <footer class="site-footer"><div class="footer-brand"><a href="#main" class="brand" aria-label="Başa dön">${brand}</a><p>Sanat. Müzik. Biraz da kendin.</p></div><div><div class="footer-links"><a href="${pinterestUrl}" target="_blank" rel="noopener noreferrer">Pinterest ${icon('arrow')}</a><button data-action="about">Sofra hakkında</button><a href="/gizlilik/">Gizlilik ve verilerin</a><button data-action="spotify-settings">Müzik tercihleri</button></div><p class="footer-bottom">SOFRA ART · SANAT. MÜZİK. BİRAZ DA KENDİN.</p></div></footer>
     </main>`;
 }
